@@ -9,12 +9,14 @@ from datetime import datetime, timezone
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
+from .. import netguard
 from ..models import Severity, Signal
 
 CONNECT_TIMEOUT = 10
 
 
 def _get_cert_der(host: str, port: int = 443) -> bytes:
+    netguard.check_host(host)
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE  # we inspect the cert ourselves, incl. mismatches

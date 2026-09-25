@@ -7,6 +7,8 @@ import time
 
 import requests
 
+from .netguard import GuardedAdapter
+
 # Bounded redirect depth is a tool-wide invariant (see fetcher.py's
 # docstring: "Bounded redirects (max 5 hops)"), not just a fetcher.py-
 # specific setting - applied here, in the one shared session builder,
@@ -22,6 +24,11 @@ def build_session(user_agent: str, tor_proxy: "str | None" = None) -> requests.S
     session.max_redirects = MAX_REDIRECTS
     if tor_proxy:
         session.proxies.update({"http": tor_proxy, "https": tor_proxy})
+    else:
+        # Inert unless USI_BLOCK_PRIVATE_ADDRESSES is set; see netguard.py.
+        adapter = GuardedAdapter()
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
     return session
 
 

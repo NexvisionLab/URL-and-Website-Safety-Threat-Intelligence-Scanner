@@ -15,7 +15,9 @@ from urllib.parse import urljoin
 
 import requests
 
+from .. import netguard
 from ..models import Severity, Signal
+from ..net import build_session
 
 DEFAULT_HASHES_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "favicon_hashes.json"
 FAVICON_FETCH_TIMEOUT = 10
@@ -59,10 +61,15 @@ def check(
 
     try:
         proxies = {"http": tor_proxy, "https": tor_proxy} if tor_proxy else None
-        resp = requests.get(
-            favicon_url, timeout=FAVICON_FETCH_TIMEOUT, proxies=proxies,
-            headers={"User-Agent": user_agent}, stream=True,
-        )
+        if netguard.enabled() and not tor_proxy:
+            # A page chooses its own favicon address, so it must not be able to aim this fetch inward.
+            getter = build_session(user_agent).get
+            resp = getter(favicon_url, timeout=FAVICON_FETCH_TIMEOUT, stream=True)
+        else:
+            resp = requests.get(
+                favicon_url, timeout=FAVICON_FETCH_TIMEOUT, proxies=proxies,
+                headers={"User-Agent": user_agent}, stream=True,
+            )
         if resp.status_code != 200:
             return None
         content = resp.raw.read(MAX_FAVICON_BYTES, decode_content=True)
