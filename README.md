@@ -270,7 +270,7 @@ the techniques; this project does not reproduce or vouch for their figures.
 
 ## License
 
-Apache License 2.0 - see [LICENSE](LICENSE).
+Apache License 2.0 - see [LICENSE](LICENSE) and [NOTICE](NOTICE).
 
 ## Project layout
 
