@@ -52,6 +52,21 @@ python investigate.py https://example.com --json
 Run `python investigate.py --help` for the full option list (cache control,
 timeouts, disabling reputation checks, etc).
 
+## Checking an online shop
+
+```bash
+python -m usi.shop some-shop.example
+python -m usi.shop some-shop.sg --paid-by paynow --json
+```
+
+The shop analyzer (`usi/shop/`) runs the full URL investigation and adds the checks that matter for
+shops: how new the shop is, how deep its discounts run, how it takes payment, whether it can be
+contacted, whether it borrows a retailer's name, and - for Singapore - whether the business
+registration number (UEN) it shows is in ACRA's register. It returns a risk band (High / Elevated /
+Low) with the named rules that produced it. A link to a marketplace such as Shopee or Carousell gets
+the platform's safety rating and advice about the seller instead. Details, evaluation results and
+known gaps: [docs/shop-analyzer.md](docs/shop-analyzer.md).
+
 ## Running it behind a web form
 
 The tool follows redirects, fetches the favicon a page declares, and opens TLS connections to
@@ -441,11 +456,15 @@ usi/
   pipeline.py          runs every layer, builds the verdict
   cache.py              own SQLite cache; list_all() backs report.py --all
   heuristics/           no-network URL/domain checks
-  lookups/                WHOIS, TLS cert, crt.sh
+  lookups/                WHOIS (with RDAP fallback), TLS cert, crt.sh
   content/                  page fetch, extraction, local classifier, brand check
   reputation/                optional external API clients
   verdict/                    signal aggregation into a final verdict
   output/                      formatter.py (human + JSON), report.py (md + html)
+  shop/                        shop analyzer (python -m usi.shop), see docs/shop-analyzer.md
 data/brands.json      curated brand -> real-domain list, edit freely
+data/retail_brands.json  retailers fake shops copy, used only by the shop analyzer
+data/shop_eval.csv    labelled shops for scripts/eval_shop.py
+scripts/              favicon hashes, shop evaluation, local ACRA register (update_acra.py)
 tests/                pure-function tests, no network required
 ```
