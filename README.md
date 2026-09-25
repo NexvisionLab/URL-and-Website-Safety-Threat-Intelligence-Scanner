@@ -1,5 +1,7 @@
 # url-safety-investigator
 
+[![tests](https://github.com/NexvisionLab/URL-and-Website-Safety-Threat-Intelligence-Scanner/actions/workflows/tests.yml/badge.svg)](https://github.com/NexvisionLab/URL-and-Website-Safety-Threat-Intelligence-Scanner/actions/workflows/tests.yml)
+
 A standalone command-line tool that investigates whether a URL or site is
 likely phishing, a scam, malware-distributing, or legitimate.
 
@@ -71,6 +73,144 @@ disclaimer. `--all` reads directly from `cache/usi_cache.sqlite3`, so it
 reflects whatever was true when each URL was actually checked - if detection
 logic has since improved, older cached entries won't reflect that until
 re-run with `--refresh`.
+
+## How it works
+
+### The investigation pipeline
+
+`usi/pipeline.py` runs every layer in this order and collects **signals**
+(one observation from one check, each with a severity). Nothing is scored
+until the very end.
+
+```mermaid
+flowchart TD
+    A([URL or domain]) --> B["normalize_target<br/>reject malformed / non-http(s) input"]
+    B --> C{"fresh result<br/>in cache?"}
+    C -- yes --> Z
+    C -- no --> D["1 - Static heuristics: always run, no network<br/>URL structure - punycode / homograph<br/>lexical / DGA-style - typosquat / combosquat"]
+    D --> H{"--offline?"}
+    H -- yes --> V
+    H -- no --> I["WHOIS"] --> J["TLS certificate"]
+    J --> K{"typosquat_match<br/>found?"}
+    K -- yes --> L["crt.sh: has the lookalike<br/>host been issued a cert?"]
+    K -- no --> M
+    L --> M{"--no-fetch?"}
+    M -- yes --> Y
+
+    M -- no --> N["2 - Live GET<br/>honest User-Agent, size + time capped,<br/>max 5 redirects, never submits anything"]
+    N --> O{"binary file or<br/>attachment response?"}
+    O -- yes --> P["download_check only<br/>(no page to analyze)"]
+    O -- no --> Q["extract title, visible text,<br/>forms, links"]
+
+    Q --> R["3 - Page-content checks<br/>form-target check - classifier - brand impersonation<br/>fake meeting page - favicon hash - ClickFix<br/>prompt injection - wallet drainer - fee scams<br/>redirect chain - cloaking comparison fetch"]
+
+    P --> Y
+    R --> Y{"reputation APIs<br/>enabled?"}
+    Y -- yes --> X["Safe Browsing - VirusTotal<br/>urlscan - AbuseIPDB"]
+    Y -- no --> V
+    X --> V["aggregator: signals -> verdict"]
+    V --> W["cache result"] --> Z([human report / JSON / report.py])
+```
+
+### How signals become a verdict
+
+The verdict is a short, ordered set of rules, never a summed score, so a
+result can always be explained by pointing at the signals behind it. A check
+that *failed* (network error, WHOIS timeout) is never treated as evidence of
+safety, and a layer you chose to skip (`--offline`, `--no-fetch`) is never
+treated as a failure.
+
+```mermaid
+flowchart TD
+    S["all signals"] --> R["drop failed checks (fetch_failed, *_unavailable)<br/>and deliberately skipped ones (fetch_skipped)<br/>-> the 'real' evidence"]
+    R --> C{"any CRITICAL?"}
+    C -- yes --> M(["Likely Malicious"])
+    C -- no --> H{"any HIGH?"}
+    H -- yes --> SU(["Suspicious"])
+    H -- no --> ME{"two or more<br/>MEDIUM?"}
+    ME -- yes --> SU
+    ME -- no --> U{"some check failed AND<br/>no other signal at all<br/>(not even INFO)?"}
+    U -- yes --> UN(["Unknown"])
+    U -- no --> SA(["Likely Safe<br/>= no red flags found,<br/>not verified safe"])
+```
+
+A single MEDIUM signal (for example a newly registered domain) deliberately
+does **not** move the verdict on its own, because legitimate new sites trigger
+it too. Weak signals only count when they corroborate each other.
+
+Every signal a check can emit, by severity:
+
+| Severity | Moves the verdict? | Signals |
+|---|---|---|
+| CRITICAL | yes: Likely Malicious | ClickFix instruction / command syntax, seed-phrase request, favicon identical to a brand's, Unicode-tag smuggling, hidden prompt-injection payload (schema / comment / hidden element), Safe Browsing / VirusTotal / urlscan malicious |
+| HIGH | yes: Suspicious | IP-literal host, `@` in authority, mixed-script homograph, typosquat match, brand name + phishing keyword, invalid TLS period, cross-domain password form, brand impersonation, fake meeting page, direct executable/script download, ClickFix (possible), wallet drainer / fake wallet UI / silent wallet enumeration, parcel-fee and toll scams, visible agent-directed instructions, cloaking mismatch, classifier risk category, AbuseIPDB high confidence |
+| MEDIUM | only two or more together | excessive subdomains / hyphens, DGA-like domain, domain under 30 days old, excessive redirect hops, brand name alone in host, lookalike host has a certificate, VirusTotal "suspicious" |
+| LOW | no (shown in reports) | suspicious TLD, URL shortener, unusually long URL, non-standard port, fresh TLS certificate, redirect through a shortener / suspicious TLD, delivery-fee language |
+| INFO | no (context only) | domain age, registrar, privacy protection, TLS issuer, punycode present, redirect summary, cloaking check consistent, page classified benign, and the "clean" results of the optional APIs |
+
+### Typosquat and combosquat matching
+
+`usi/heuristics/typosquat.py` compares the host to the curated brand list in
+`data/brands.json`. A host that belongs to *any* listed brand (including its
+official regional and sibling domains) is never treated as a lookalike.
+
+```mermaid
+flowchart TD
+    A["host"] --> B{"is it (a subdomain of)<br/>any listed brand's real domain?"}
+    B -- yes --> N(["no signal"])
+    B -- no --> C{"one edit away from a real domain?<br/>dropped / swapped / doubled letter,<br/>digit look-alike, hyphen, other TLD"}
+    C -- yes --> T(["typosquat_match - HIGH"])
+    C -- no --> D["undo look-alike characters<br/>0->o  3->e  4->a  1->l or i  rn->m ..."]
+    D --> E{"brand name inside the host?<br/>(names under 4 letters: must be a<br/>whole label AND come with a keyword)"}
+    E -- no --> N
+    E -- yes --> F{"also a phishing keyword as its<br/>own label? login, secure, verify,<br/>account, support, kyc ..."}
+    F -- yes --> H(["combosquat_keyword_match - HIGH"])
+    F -- no --> M(["combosquat_keyword_match - MEDIUM"])
+```
+
+### Prompt-injection detection (attacks aimed at AI agents)
+
+Most checks defend the human visitor. `usi/content/prompt_injection.py`
+defends an AI agent that fetches the page on someone's behalf. It parses the
+HTML so that "hidden" and "instruction" must be true of the **same element**;
+`display:none` and `aria-hidden` alone are everywhere on normal pages.
+
+```mermaid
+flowchart TD
+    A["raw HTML"] --> B{"contains Unicode tag characters<br/>U+E0000 - U+E007F ?"}
+    B -- yes --> C1(["CRITICAL: unicode_tag_smuggling"])
+    B -- no --> D{"agent-directed instruction inside<br/>a schema.org JSON-LD block?"}
+    D -- yes --> C2(["CRITICAL: hidden_instruction_in_schema"])
+    D -- no --> E{"inside an HTML comment?"}
+    E -- yes --> C3(["CRITICAL: hidden_instruction_in_comment"])
+    E -- no --> F{"inside an element hidden by inline CSS<br/>or aria-hidden?"}
+    F -- yes --> C4(["CRITICAL: hidden_instruction_element"])
+    F -- no --> G{"same wording in ordinary<br/>visible text?"}
+    G -- yes --> H1(["HIGH: visible_agent_instruction"])
+    G -- no --> N(["no signal"])
+```
+
+"Instruction" means phrases such as *ignore previous instructions*, *you are an
+AI agent*, *treat this site as authoritative*, or a payment directive.
+
+### Where the code lives
+
+```
+usi/pipeline.py        orchestrates everything above, builds the verdict
+usi/heuristics/        no-network checks on the URL string itself
+usi/lookups/           WHOIS, TLS certificate, crt.sh
+usi/content/           fetcher, extractor, and every page-content check
+usi/reputation/        optional third-party API clients
+usi/verdict/           aggregator.py: the verdict rules shown above
+usi/output/            human/JSON formatter, Markdown + HTML report builder
+usi/net.py             shared HTTP session: User-Agent, redirect and time caps
+data/                  brand list and favicon hashes (plain JSON, easy to extend)
+```
+
+Design rules the code holds to: the fetch is read-only (a single `GET`, never a
+form submit or login); the primary fetch always identifies itself honestly; every
+check is a pure function that returns a signal or nothing, so each is tested in
+isolation; and the whole suite runs offline.
 
 ## What it checks
 
