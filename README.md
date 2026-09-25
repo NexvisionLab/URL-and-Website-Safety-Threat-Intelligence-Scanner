@@ -52,6 +52,25 @@ python investigate.py https://example.com --json
 Run `python investigate.py --help` for the full option list (cache control,
 timeouts, disabling reputation checks, etc).
 
+## Running it behind a web form
+
+The tool follows redirects, fetches the favicon a page declares, and opens TLS connections to
+the host it is given. On your own machine that is what you want. Behind a public form it lets a
+visitor aim the tool at your internal network (for example `http://169.254.169.254/`, or a redirect
+to `http://127.0.0.1:9200/`). Set this before exposing it:
+
+```bash
+export USI_BLOCK_PRIVATE_ADDRESSES=1
+```
+
+Any target that is, or resolves to, a loopback, private, link-local, reserved or otherwise
+non-global address is then refused, and the check is repeated on every redirect hop. Requests sent
+through Tor are not checked, because the Tor proxy resolves the name.
+
+The check resolves the name once and the connection resolves it again, so a DNS server that changes
+its answer between the two can still slip through. Also run the service on a network with no route to
+internal hosts.
+
 ## Generating a report
 
 `report.py` turns one or more investigations into a shareable Markdown or
