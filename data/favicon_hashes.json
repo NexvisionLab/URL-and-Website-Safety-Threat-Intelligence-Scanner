@@ -1,0 +1,180 @@
+{
+  "_comment": "Brand -> real favicon MD5 hash, built by scripts/build_favicon_hashes.py. Only includes brands whose favicon hash was verified stable across two fetches. Re-run periodically - brands rotate favicons occasionally.",
+  "favicons": {
+    "DHL": {
+      "domain": "dhl.com",
+      "favicon_url": "https://www.dhl.com/favicon.ico",
+      "md5": "d8106bf3a1d00ab43b01e6e3c92500eb",
+      "size": 1150,
+      "_note": "Homepage HTML fetch was blocked by dhl.com's bot protection during the automated builder run, but /favicon.ico itself was independently verified stable across 4 separate fetches, including matching a real OpenPhish-listed DHL phishing clone's favicon exactly."
+    },
+    "PayPal": {
+      "domain": "paypal.com",
+      "favicon_url": "https://www.paypalobjects.com/marketing/web/icons/monogram/pp64.png",
+      "md5": "f4ed8f1d05cb8acca84bf7c82e2f44f3",
+      "size": 750
+    },
+    "Microsoft": {
+      "domain": "microsoft.com",
+      "favicon_url": "https://www.microsoft.com/favicon.ico?v2",
+      "md5": "12e3dac858061d088023b2bd48e2fa96",
+      "size": 17174
+    },
+    "Google": {
+      "domain": "google.com",
+      "favicon_url": "https://www.google.com/favicon.ico",
+      "md5": "f3418a443e7d841097c714d69ec4bcb8",
+      "size": 5430
+    },
+    "Meta": {
+      "domain": "facebook.com",
+      "favicon_url": "https://static.xx.fbcdn.net/rsrc.php/y1/r/ay1hV6OlegS.ico",
+      "md5": "b68f6a53572803fc0845856e65ba6b11",
+      "size": 20366
+    },
+    "Chase": {
+      "domain": "chase.com",
+      "favicon_url": "https://www.chase.com/etc/designs/chase-ux/favicon.ico",
+      "md5": "6f5eaac8a462e4c492efc080f377b5b4",
+      "size": 15086
+    },
+    "Wells Fargo": {
+      "domain": "wellsfargo.com",
+      "favicon_url": "https://www17.wellsfargomedia.com/assets/images/icons/ico/favicon.ico",
+      "md5": "cd112f1acb59ef6e59e09c0effd8ce2a",
+      "size": 9198
+    },
+    "Citibank": {
+      "domain": "citibank.com",
+      "favicon_url": "https://www.citi.com/cbol-hp-static-assets/assets/favicon.ico",
+      "md5": "5c529d13403aaef133f480514b0d7b3f",
+      "size": 8747
+    },
+    "HSBC": {
+      "domain": "hsbc.com",
+      "favicon_url": "https://www.hsbc.com/assets/basekit.features/favicon/images/favicon.ico",
+      "md5": "f831dc73e2ac4163b9bdf17f34bb1438",
+      "size": 318
+    },
+    "Coinbase": {
+      "domain": "coinbase.com",
+      "favicon_url": "https://www.coinbase.com/assets/sw-cache/a_6z3OfXe9.png",
+      "md5": "135ffd17e05436fcd54db9a5a623f93a",
+      "size": 540
+    },
+    "Kraken": {
+      "domain": "kraken.com",
+      "favicon_url": "https://www.kraken.com/favicon.ico",
+      "md5": "ed1772b6d6961564bd5d17634c3f1290",
+      "size": 15406
+    },
+    "MetaMask": {
+      "domain": "metamask.io",
+      "favicon_url": "https://metamask.io/favicons/default/apple-touch-icon.png",
+      "md5": "3dc40dc71436fb7c15dba38d80fc3331",
+      "size": 3990
+    },
+    "FedEx": {
+      "domain": "fedex.com",
+      "favicon_url": "https://www.fedex.com/favicon.ico",
+      "md5": "22f30d56a09365736dcccd4f1f68a022",
+      "size": 181457
+    },
+    "UPS": {
+      "domain": "ups.com",
+      "favicon_url": "https://www.ups.com/favicon.ico",
+      "md5": "afd13e52f285793f5eaa266c12a19abe",
+      "size": 2238
+    },
+    "USPS": {
+      "domain": "usps.com",
+      "favicon_url": "https://www.usps.com/assets/images/home/favicon.ico",
+      "md5": "44cbb0da61b3e085f65257f77f9f934a",
+      "size": 32245
+    },
+    "Royal Mail": {
+      "domain": "royalmail.com",
+      "favicon_url": "https://www.royalmail.com/themes/custom/rmlcwr/favicon.ico",
+      "md5": "3b1e1a3f7ea2c1ae22748f963728cba6",
+      "size": 9662
+    },
+    "Twitter/X": {
+      "domain": "twitter.com",
+      "favicon_url": "https://x.com/favicon.ico",
+      "md5": "9d99a2372bbd5b28ef4b2eaecac8c805",
+      "size": 549
+    },
+    "Dropbox": {
+      "domain": "dropbox.com",
+      "favicon_url": "https://cfl.dropboxstatic.com/static/metaserver/static/images/favicon.ico",
+      "md5": "f25511f4158c2dfab6aa11a07d026e4a",
+      "size": 4286
+    },
+    "Steam": {
+      "domain": "steampowered.com",
+      "favicon_url": "https://store.steampowered.com/favicon.ico",
+      "md5": "231913fdebabcbe65f4b0052372bde56",
+      "size": 38554
+    },
+    "GOV.UK": {
+      "domain": "gov.uk",
+      "favicon_url": "https://www.gov.uk/assets/frontend/favicon-24f9fbe064118d58937932e73edafd1d50cb60f7bd84f52308382a309bc2d655.ico",
+      "md5": "dec306ee07463221fae2299afea1694a",
+      "size": 6318
+    },
+    "American Express": {
+      "domain": "americanexpress.com",
+      "favicon_url": "https://www.americanexpress.com/favicon.ico",
+      "md5": "974ccc6c4c6e1c7f04606973beb3ba20",
+      "size": 1358
+    },
+    "Visa": {
+      "domain": "visa.com",
+      "favicon_url": "https://www.visa.com.sg/content/dam/VCOM/Brand/favicon.ico",
+      "md5": "84cf5c9481517216aebbdeef45bbc579",
+      "size": 15406
+    },
+    "Mastercard": {
+      "domain": "mastercard.com",
+      "favicon_url": "https://www.mastercard.com/etc.clientlibs/marts/clientlibs/clientlib-site/resources/icons/mastercard-favicon.ico",
+      "md5": "22f2aca9fa8461eac3306bae47a6ea99",
+      "size": 4414
+    },
+    "Spotify": {
+      "domain": "spotify.com",
+      "favicon_url": "https://open.spotifycdn.com/cdn/images/favicon32.b64ecc03.png",
+      "md5": "668e11e82120297b1878c4db77a44ab2",
+      "size": 1129
+    },
+    "Zoom": {
+      "domain": "zoom.us",
+      "favicon_url": "https://st1.zoom.us/homepage/20260918-1235/primary/favicon.ico",
+      "md5": "e94edab7f0b35d603ff537c17ff8f1fd",
+      "size": 4286
+    },
+    "DocuSign": {
+      "domain": "docusign.com",
+      "favicon_url": "https://www.docusign.com/assets/images/favicon.ico",
+      "md5": "47878c4532b1eec5302d1b89b9d2d7aa",
+      "size": 9662
+    },
+    "LastPass": {
+      "domain": "lastpass.com",
+      "favicon_url": "https://www.lastpass.com/-/media/43c6c6862a08410a8ef34ab46a3a750b.ico",
+      "md5": "d1b7ef38919e6e80014d4de9ad01972b",
+      "size": 5694
+    },
+    "Norton": {
+      "domain": "norton.com",
+      "favicon_url": "https://sg.norton.com/content/dam/norton/cb/nlok.ico",
+      "md5": "430e21c29864405face592c95afbdf51",
+      "size": 4153
+    },
+    "Airbnb": {
+      "domain": "airbnb.com",
+      "favicon_url": "https://www.airbnb.com/favicon.ico",
+      "md5": "33517106fc325ce3c5507bbf8830ec0f",
+      "size": 4286
+    }
+  }
+}

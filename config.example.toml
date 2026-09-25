@@ -1,0 +1,40 @@
+# Copy this file to config.toml and fill in whatever you have.
+# Nothing here is required - the tool reaches a full verdict with every
+# section below left as-is (all reputation checks disabled, Tor off).
+# API keys can also be supplied via env vars instead of this file:
+#   USI_SAFE_BROWSING_API_KEY, USI_VIRUSTOTAL_API_KEY,
+#   USI_URLSCAN_API_KEY, USI_ABUSEIPDB_API_KEY
+# Either way, nothing is ever sent to a vendor unless the master switch
+# below is set to true - the target URL/domain is what gets sent.
+
+[reputation]
+enabled = false            # master kill-switch, default OFF
+
+[reputation.safe_browsing]
+enabled = false
+api_key = ""
+
+[reputation.virustotal]
+enabled = false
+api_key = ""
+
+[reputation.urlscan]
+enabled = false
+api_key = ""
+
+[reputation.abuseipdb]
+enabled = false
+api_key = ""
+
+[tor]
+enabled = false
+proxy = "socks5h://127.0.0.1:9050"
+
+[cache]
+ttl_hours = 24
+path = "cache/usi_cache.sqlite3"
+
+[fetch]
+timeout_seconds = 20
+max_bytes = 2097152
+user_agent = "url-safety-investigator/0.1 (local research tool)"

@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+cache/*.sqlite3
+config.toml
+.pytest_cache/
+*.egg-info/
+report.md
+report.html
