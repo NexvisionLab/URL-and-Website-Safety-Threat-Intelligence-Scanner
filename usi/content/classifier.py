@@ -31,6 +31,12 @@ from ..models import Severity, Signal
 ENGLISH_MODEL_NAME = "all-MiniLM-L6-v2"
 MULTILINGUAL_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
 SITE_THRESHOLD = 0.24
+# Below this the resemblance is too weak to count as evidence. Measured 2026-09-25 on 27 well-known sites
+# fetched live: paypal.com scored 0.38 for "scam-shop", target.com 0.34, stripe.com 0.32, costco.com,
+# singpost.com and walmart.com 0.28 - as high as synthetic scam-shop texts (0.30 and 0.33), so a score in
+# that range cannot tell a real shop from a fake one. Only the malware-download text stood clear of every
+# real site (0.57). At the old cutoff (0.24) about 44% of those real sites raised a HIGH signal on their own.
+HIGH_CONFIDENCE = 0.45
 TEXT_TRUNCATE_CHARS = 4000
 LANG_DETECT_SAMPLE_CHARS = 500
 
@@ -106,8 +112,17 @@ def classify(text: str) -> "Signal | None":
             evidence={"category": category, "confidence": round(confidence, 3), "model": model_name},
         )
 
+    evidence = {"category": category, "confidence": round(confidence, 3), "model": model_name}
+    if confidence < HIGH_CONFIDENCE:
+        # LOW is ignored by the verdict: shown for transparency, never a reason to distrust a site
+        return Signal(
+            source="classifier", code="classifier_weak_resemblance", severity=Severity.LOW,
+            message=(f"The wording of this page loosely resembles '{category}' pages (score {confidence:.2f}), "
+                     "but that is common on ordinary shops and service sites and is not a warning on its own."),
+            evidence=evidence,
+        )
     return Signal(
         source="classifier", code="classifier_risk_category", severity=Severity.HIGH,
         message=f"Page content resembles '{category}' (confidence {confidence:.2f}).",
-        evidence={"category": category, "confidence": round(confidence, 3), "model": model_name},
+        evidence=evidence,
     )
