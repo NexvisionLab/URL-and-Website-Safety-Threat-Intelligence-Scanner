@@ -219,7 +219,7 @@ def run(
                 cloaking_signal = cloaking.check(
                     url, fetch_result.http_status, len(raw_html),
                     timeout=config.fetch_timeout_seconds, max_bytes=config.fetch_max_bytes,
-                    tor_proxy=tor_proxy,
+                    tor_proxy=tor_proxy, primary_html=raw_html,
                 ) if fetch_result.text is not None else None
                 if cloaking_signal:
                     signals.append(cloaking_signal)

@@ -152,3 +152,66 @@ def test_urgency_bait_takes_priority_over_enumeration():
     )
     assert sig is not None
     assert sig.code == "crypto_drainer_pattern"
+
+
+# --- 2026-09-25: mentioning a seed phrase is not asking for one (darknyx.com false positive) ---
+
+def test_a_site_that_lists_seed_phrase_and_private_key_as_indicator_types_is_not_flagged():
+    # wording from the darknyx.com indicator list, which the checker flagged as "likely malicious"
+    sig = crypto_drainer.check(
+        page_title="DarkNyx",
+        page_text="Indicators we detect: Monero address IP address Bitcoin private key Wallet seed phrase PGP key "
+                  "SQL injection string .onion link Certificate Private key CVE Session token Card BIN",
+        raw_html="<p>indicator list</p>",
+    )
+    assert sig is None
+
+
+def test_a_warning_not_to_share_a_seed_phrase_is_not_flagged():
+    for text in (
+        "Never enter your seed phrase on any website.",
+        "We will never ask you to enter your recovery phrase.",
+        "Do not paste your private key into a web page, and don't share your mnemonic phrase.",
+        "Support will never ask you to type your 12-word phrase.",
+    ):
+        assert crypto_drainer.check(page_title="Security tips", page_text=text, raw_html="") is None, text
+
+
+def test_a_request_after_an_unrelated_negation_still_fires():
+    sig = crypto_drainer.check(
+        page_title="Wallet Sync", page_text="This is not a scam. Enter your seed phrase to restore access.", raw_html="",
+    )
+    assert sig is not None and sig.code == "seed_phrase_request"
+
+
+def test_varied_request_wordings_still_fire():
+    for text in (
+        "Paste your 24-word recovery phrase below",
+        "Please provide the seed phrase for your wallet",
+        "Verify your wallet: import private key",
+        "To continue, submit your mnemonic phrase.",
+    ):
+        sig = crypto_drainer.check(page_title="Wallet", page_text=text, raw_html="")
+        assert sig is not None and sig.code == "seed_phrase_request", text
+
+
+def test_a_form_field_asking_for_one_fires_even_without_an_instruction_sentence():
+    sig = crypto_drainer.check(
+        page_title="Wallet", page_text="Recovery phrase",
+        raw_html='<form><textarea name="seed" placeholder="12 words"></textarea></form>',
+    )
+    assert sig is not None and sig.code == "seed_phrase_request"
+
+
+def test_a_field_named_like_a_seed_without_the_term_in_the_text_is_not_flagged():
+    assert crypto_drainer.check(
+        page_title="Form", page_text="Contact us", raw_html='<input name="recovery_email">',
+    ) is None
+
+
+def test_seed_request_matching_is_fast_on_hostile_text():
+    import time
+    text = ("enter " + "word " * 5000 + "seed " * 5000) * 3
+    start = time.time()
+    crypto_drainer.check(page_title="x", page_text=text, raw_html="<input " + "a" * 5000)
+    assert time.time() - start < 2

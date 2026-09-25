@@ -12,6 +12,8 @@ is a narrow, disclosed exception made purely to test whether the SITE
 treats the two identically - its purpose and result are always reported
 back to the caller, never hidden, which is what keeps it consistent
 with "no covert evasion" rather than contradicting it."""
+from bs4 import BeautifulSoup
+
 from ..models import Severity, Signal
 from ..net import build_session, capped_get
 
@@ -28,6 +30,31 @@ NEAR_EMPTY_BYTES = 200
 SIZE_RATIO_THRESHOLD = 3.0
 
 
+def _shape(html: str) -> dict:
+    """The parts of a page that say WHAT it is: its title and whether it carries a form or a password
+    field. Sites routinely send a lighter or heavier page to an unfamiliar client, so size alone says
+    nothing; a different title, or a login form in only one version, is what cloaking looks like."""
+    soup = BeautifulSoup(html, "lxml")
+    title = " ".join(soup.title.get_text().split()).lower() if soup.title else ""
+    return {
+        "title": title,
+        "password_field": soup.find("input", {"type": "password"}) is not None,
+        "form": soup.find("form") is not None,
+    }
+
+
+def _content_differences(tool_html: str, browser_html: str) -> "list[str]":
+    a, b = _shape(tool_html), _shape(browser_html)
+    differences = []
+    if a["title"] and b["title"] and a["title"] != b["title"]:
+        differences.append("title")
+    if a["password_field"] != b["password_field"]:
+        differences.append("password_field")
+    if a["form"] != b["form"]:
+        differences.append("form")
+    return differences
+
+
 def check(
     url: str,
     primary_status: "int | None",
@@ -35,6 +62,7 @@ def check(
     timeout: int,
     max_bytes: int,
     tor_proxy: "str | None" = None,
+    primary_html: "str | None" = None,
 ) -> "Signal | None":
     session = build_session(BROWSER_USER_AGENT, tor_proxy)
     try:
@@ -60,15 +88,34 @@ def check(
     smaller, larger = sorted([primary_size, browser_size])
     if larger > 0 and (smaller <= NEAR_EMPTY_BYTES or larger / max(smaller, 1) >= SIZE_RATIO_THRESHOLD):
         if smaller != larger:  # both same size (e.g. both 0) isn't a meaningful mismatch
+            differences: "list[str] | None" = None
+            if smaller > NEAR_EMPTY_BYTES and primary_html is not None:
+                differences = _content_differences(primary_html, resp._capped_content.decode("utf-8", "replace"))
+                if not differences:
+                    return Signal(
+                        source="cloaking", code="cloaking_size_differs_content_same", severity=Severity.INFO,
+                        message=(
+                            f"This site returned different response sizes to this tool's User-Agent "
+                            f"({primary_size} bytes) and to a standard browser User-Agent ({browser_size} "
+                            "bytes), but both are the same page (same title, same form structure). Large "
+                            "sites often serve a lighter page to an unfamiliar client - this is not "
+                            "evidence of cloaking."
+                        ),
+                        evidence={"tool_ua_bytes": primary_size, "browser_ua_bytes": browser_size},
+                    )
+            # near-empty for one side is the classic scanner-cloak; a size gap with different content is too.
+            # Without the tool's own HTML to compare, the size alone is only a weak hint.
+            severity = Severity.MEDIUM if (smaller > NEAR_EMPTY_BYTES and primary_html is None) else Severity.HIGH
             return Signal(
-                source="cloaking", code="cloaking_content_size_mismatch", severity=Severity.HIGH,
+                source="cloaking", code="cloaking_content_size_mismatch", severity=severity,
                 message=(
                     f"This site returned substantially different response sizes to this "
                     f"tool's own User-Agent ({primary_size} bytes) than to a standard browser "
                     f"User-Agent ({browser_size} bytes) for the identical URL - consistent "
                     "with cloaking."
                 ),
-                evidence={"tool_ua_bytes": primary_size, "browser_ua_bytes": browser_size},
+                evidence={"tool_ua_bytes": primary_size, "browser_ua_bytes": browser_size,
+                          **({"content_differs_in": differences} if differences else {})},
             )
 
     return Signal(

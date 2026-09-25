@@ -20,7 +20,13 @@ A THIRD, even more damning pattern stands alone regardless of either
 shape above: any request for a seed phrase, recovery phrase, or private
 key typed/pasted into a web page. No legitimate wallet ever asks for
 this in a browser - every wallet's own documentation says so - so this
-fires CRITICAL on the phrase alone, no corroboration needed.
+fires CRITICAL on the request alone, no corroboration needed. A request
+means an instruction to enter one ("enter your recovery phrase") or a form
+field that asks for one; merely naming the terms does not count, and a
+negated instruction ("never enter your seed phrase") is a warning, not a
+request. (Before 2026-09-25 the bare words were enough, which flagged
+darknyx.com because it lists "private key" and "seed phrase" among the
+indicator types it detects.)
 
 A FOURTH shape, described in JUMPSEC's source-level analysis of a leaked
 BlueNoroff fake-Zoom/Teams phishing kit: the page starts probing wallet
@@ -81,6 +87,43 @@ _SEED_PHRASE_PATTERNS = (
     r"24[\s-]word\s+phrase",
     r"mnemonic\s+phrase",
 )
+
+_SEED_TERM = "(?:" + "|".join(_SEED_PHRASE_PATTERNS) + ")"
+
+# An instruction to hand one over: a verb of entering/submitting, then at most three words
+# ("your", "the", "12-word"...), then the term. Bounded, so it cannot backtrack badly on long text.
+_SEED_INSTRUCTION_RE = re.compile(
+    r"\b(?:enter|type|paste|input|provide|submit|import|restore|verify|confirm|validate)\b"
+    r"(?:\s+[\w'-]+){0,3}?\s+" + _SEED_TERM
+)
+
+# The same sentence negated ("never enter your seed phrase", "we will never ask you to enter ...").
+_NEGATION_RE = re.compile(
+    r"\b(?:never|do\s+not|don't|not|won't|will\s+not|should\s+not|shouldn't|no\s+legitimate|neither|nor|without)\b"
+)
+
+# A form field that asks for one: an input/textarea whose own attributes name it.
+_SEED_FIELD_RE = re.compile(
+    r"<(?:input|textarea)\b[^>]{0,300}?(?:seed|mnemonic|recovery|private[\s_-]?key|secret[\s_-]?phrase)",
+)
+
+
+def _seed_phrase_request(text_l: str, html_l: str) -> "list[str]":
+    """The seed-phrase patterns present on the page, but only when the page asks for one to be
+    entered; an empty list for a page that merely mentions them."""
+    text_l = text_l.replace("’", "'")
+    present = [p for p in _SEED_PHRASE_PATTERNS if re.search(p, text_l)]
+    if not present:
+        return []
+    for m in _SEED_INSTRUCTION_RE.finditer(text_l):
+        # only the same sentence can negate it: "This is not a scam. Enter your seed phrase" is a request
+        same_sentence = re.split(r"[.!?\n]", text_l[max(0, m.start() - 120):m.start()])[-1]
+        if not _NEGATION_RE.search(same_sentence[-60:]):
+            return present
+    if _SEED_FIELD_RE.search(html_l):
+        return present
+    return []
+
 
 # Wallet brand names worth checking against the title even when the
 # brand isn't in brands.json's broader curated list.
@@ -168,8 +211,10 @@ def check(
     if not title_l and not text_l and not html_l:
         return None
 
-    # Highest priority, fires alone: a request for a seed phrase/private key.
-    seed_hits = [p for p in _SEED_PHRASE_PATTERNS if re.search(p, text_l)]
+    # Highest priority, fires alone: a REQUEST for a seed phrase/private key. Mentioning one is not
+    # a request - security sites, wallet docs and warnings ("never enter your seed phrase") all name
+    # them - so this needs an instruction to enter one, or an input field asking for one.
+    seed_hits = _seed_phrase_request(text_l, html_l)
     if seed_hits:
         return Signal(
             source="crypto_drainer", code="seed_phrase_request", severity=Severity.CRITICAL,
