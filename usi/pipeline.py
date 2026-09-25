@@ -81,7 +81,7 @@ def run(
     if offline:
         skipped += ["whois", "tls_cert", "crtsh", "fetch", "classifier",
                     "brand_impersonation", "favicon", "clickfix", "crypto_drainer",
-                    "delivery_fee", "redirect_chain", "cloaking", "prompt_injection",
+                    "delivery_fee", "redirect_chain", "cloaking", "prompt_injection", "shop_check",
                     "reputation"]
     else:
         # 2. WHOIS
@@ -112,7 +112,7 @@ def run(
             # 5. Live fetch + extraction + classification + brand check
             from .content import (
                 brand_impersonation, classifier, clickfix, cloaking, crypto_drainer, delivery_fee,
-                extractor, fake_meeting, favicon, fetcher, prompt_injection,
+                extractor, fake_meeting, favicon, fetcher, prompt_injection, shop_check,
             )
             tor_proxy = config.tor_proxy if (is_onion or config.tor_enabled) else None
             fetch_result = fetcher.fetch(
@@ -202,6 +202,9 @@ def run(
                 toll_signal = delivery_fee.check_toll(extracted.text)
                 if toll_signal:
                     signals.append(toll_signal)
+
+                # Fake-shop signs. Silent unless the page is recognisably a shop; reads the WHOIS age gathered above.
+                signals += shop_check.check(host, extracted.title, extracted.text, raw_html, signals)
 
                 # Redirect-chain analysis over the hops requests followed.
                 final_host = urlparse(fetch_result.final_url or url).hostname or host

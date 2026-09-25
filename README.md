@@ -161,9 +161,9 @@ Every signal a check can emit, by severity:
 
 | Severity | Moves the verdict? | Signals |
 |---|---|---|
-| CRITICAL | yes: Likely Malicious | ClickFix instruction / command syntax, seed-phrase request, favicon identical to a brand's, Unicode-tag smuggling, hidden prompt-injection payload (schema / comment / hidden element), Safe Browsing / VirusTotal / urlscan malicious |
-| HIGH | yes: Suspicious | IP-literal host, `@` in authority, mixed-script homograph, typosquat match, brand name + phishing keyword, invalid TLS period, cross-domain password form, brand impersonation, fake meeting page, direct executable/script download, ClickFix (possible), wallet drainer / fake wallet UI / silent wallet enumeration, parcel-fee and toll scams, visible agent-directed instructions, cloaking mismatch, classifier risk category, AbuseIPDB high confidence |
-| MEDIUM | only two or more together | excessive subdomains / hyphens, DGA-like domain, domain under 30 days old, excessive redirect hops, brand name alone in host, lookalike host has a certificate, VirusTotal "suspicious" |
+| CRITICAL | yes: Likely Malicious | ClickFix instruction / command syntax, seed-phrase request, favicon identical to a brand's, Unicode-tag smuggling, hidden prompt-injection payload (schema / comment / hidden element), five or more kinds of fake-shop sign together, Safe Browsing / VirusTotal / urlscan malicious |
+| HIGH | yes: Suspicious | three kinds of fake-shop sign together, payment only by irreversible methods, a famous brand at a deep discount on an unofficial domain, IP-literal host, `@` in authority, mixed-script homograph, typosquat match, brand name + phishing keyword, invalid TLS period, cross-domain password form, brand impersonation, fake meeting page, direct executable/script download, ClickFix (possible), wallet drainer / fake wallet UI / silent wallet enumeration, parcel-fee and toll scams, visible agent-directed instructions, cloaking mismatch, classifier risk category, AbuseIPDB high confidence |
+| MEDIUM | only two or more together | fake-shop: 70%+ discounts, no contact details, no policy pages; excessive subdomains / hyphens, DGA-like domain, domain under 30 days old, excessive redirect hops, brand name alone in host, lookalike host has a certificate, VirusTotal "suspicious" |
 | LOW | no (shown in reports) | suspicious TLD, URL shortener, unusually long URL, non-standard port, fresh TLS certificate, redirect through a shortener / suspicious TLD, delivery-fee language |
 | INFO | no (context only) | domain age, registrar, privacy protection, TLS issuer, punycode present, redirect summary, cloaking check consistent, page classified benign, and the "clean" results of the optional APIs |
 
@@ -361,6 +361,21 @@ isolation; and the whole suite runs offline.
     Unicode "tag"-smuggling technique being reused to evade phishing
     filters aimed at humans, so this check has value against both threat
     models. See [References](#references).
+
+20. **Fake online shop detection** (`usi/content/shop_check.py`) — silent unless the page is
+    recognisably a shop (cart or checkout wording, several prices, a shop platform's markup, product
+    schema). It then reports each feature it can see as its own signal: claims or crossed-out prices
+    70% or more below normal, closing-down and clearance stories, countdown and scarcity pressure, no
+    contact details, no returns / shipping / terms / privacy pages, a free-mail address as the only
+    contact, payment named only by methods that cannot be reversed (bank transfer, crypto, gift cards),
+    a famous retail brand at a deep discount on a domain that is not the brand's, and a bargain-word
+    domain on a cheap ending. What it finds in the shop's favour (contact details, a returns policy,
+    card or PayPal payment, a company name) is listed too. It says "several classic fake-shop signs
+    together" only when independent *kinds* of red flag line up (three is HIGH, five is CRITICAL);
+    features of the same kind do not add up. Things that are *missing* are only reported when the page
+    has enough visible text to have shown them: a shop built mostly by scripts is reported as "not fully
+    readable" instead. Calibrated on about twenty real shops (mainstream retailers, independent Shopify
+    stores, deep-discount sites): none received a MEDIUM or higher shop signal. It never contacts the shop.
 
 The curated brand list (`data/brands.json`) covers major courier, bank, and
 payment brands beyond the US/UK - including Brazil (Correios, Nubank, Itaú,
