@@ -136,9 +136,11 @@ def find_typosquat_match(host: str, brands: "list[dict]") -> "Signal | None":
                     severity=Severity.HIGH,
                     message=(
                         f"'{host}' closely resembles '{real_domain}' ({name}) - "
-                        "a common typosquat/combosquat pattern of a well-known brand."
+                        "a common typosquat/combosquat pattern of a well-known brand. "
+                        f"The real {name} website is {real_domain}."
                     ),
-                    evidence={"host": host, "brand": name, "real_domain": real_domain},
+                    evidence={"host": host, "brand": name, "real_domain": real_domain,
+                              "real_domains": brand["domains"][:3]},
                 )
     return None
 
@@ -180,7 +182,7 @@ def find_combosquat_keyword_match(host: str, brands: "list[dict]") -> "Signal | 
             # most-impersonated brands, but "ups" is inside plenty of
             # words): require it as a whole label AND a phishing keyword.
             if name_l in tokens and keywords:
-                matches.append((name_l, brand["name"]))
+                matches.append((name_l, brand))
             continue
         real_domains = [d.lower() for d in brand["domains"]]
         if host_l in real_domains:
@@ -188,13 +190,15 @@ def find_combosquat_keyword_match(host: str, brands: "list[dict]") -> "Signal | 
         if any(host_l.endswith("." + d) for d in real_domains):
             continue  # legitimate subdomain
         if any(name_l in h for h in haystacks):
-            matches.append((name_l, brand["name"]))
+            matches.append((name_l, brand))
 
     if not matches:
         return None
 
     matches.sort(key=lambda m: -len(m[0]))
-    _, brand_name = matches[0]
+    _, matched_brand = matches[0]
+    brand_name = matched_brand["name"]
+    real_domains = matched_brand["domains"][:3]
     return Signal(
         source="typosquat",
         code="combosquat_keyword_match",
@@ -202,9 +206,13 @@ def find_combosquat_keyword_match(host: str, brands: "list[dict]") -> "Signal | 
         message=(
             f"'{host}' contains the brand name '{brand_name}'"
             + (f" alongside {', '.join(repr(k) for k in keywords)}" if keywords else "")
-            + " but is not one of its known domains - a common combosquat pattern."
+            + " but is not one of its known domains - a common combosquat pattern. "
+            + f"The real {brand_name} website is {real_domains[0]}."
         ),
-        evidence={"host": host, "brand": brand_name, "keywords": keywords},
+        evidence={"host": host, "brand": brand_name, "keywords": keywords, "real_domains": real_domains,
+                  # the brand's name stands as its own word in the host ("xzy-singpost.com"), not just
+                  # a substring of a longer word ("metallica-fans.com" contains "meta")
+                  "brand_is_whole_label": matched_brand["name"].lower().replace(" ", "").replace("/", "") in tokens},
     )
 
 

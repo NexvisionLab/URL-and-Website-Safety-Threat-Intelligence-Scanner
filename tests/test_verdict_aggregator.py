@@ -80,3 +80,24 @@ def test_clean_info_evidence_alongside_a_skip_is_likely_safe():
 def test_reputation_client_unavailable_code_recognized_as_failure():
     report = aggregator.rate([sig(Severity.INFO, code="virustotal_unavailable")])
     assert report.verdict == "Unknown"
+
+
+# --- 2026-09-25: an unresolved brand lookalike must not read as safe ---
+
+def _lookalike(whole_label):
+    return Signal(source="typosquat", code="combosquat_keyword_match", severity=Severity.MEDIUM, message="x",
+                  evidence={"brand_is_whole_label": whole_label})
+
+
+def test_brand_lookalike_whose_page_could_not_load_is_suspicious():
+    report = aggregator.rate([_lookalike(True), sig(Severity.INFO, code="fetch_failed", source="fetch")])
+    assert report.verdict == "Suspicious"
+
+
+def test_brand_lookalike_that_loaded_stays_as_before():
+    assert aggregator.rate([_lookalike(True)]).verdict == "Likely Safe"
+
+
+def test_substring_only_lookalike_with_a_failed_fetch_stays_as_before():
+    report = aggregator.rate([_lookalike(False), sig(Severity.INFO, code="fetch_failed", source="fetch")])
+    assert report.verdict == "Likely Safe"

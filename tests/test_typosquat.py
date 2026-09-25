@@ -151,3 +151,35 @@ def test_combosquat_prefers_specific_match_regardless_of_list_order():
     sig = typosquat.find_combosquat_keyword_match("metamask-connect.vercel.app", brands)
     assert sig is not None
     assert sig.evidence["brand"] == "MetaMask"
+
+
+# --- 2026-09-25: name the real website; SingPost lookalike (xzy-singpost.com, a live scam) ---
+
+def test_combosquat_message_and_evidence_name_the_real_website():
+    brands = [{"name": "SingPost", "domains": ["singpost.com"]}]
+    sig = typosquat.find_combosquat_keyword_match("xzy-singpost.com", brands)
+    assert sig is not None
+    assert "The real SingPost website is singpost.com." in sig.message
+    assert sig.evidence["real_domains"] == ["singpost.com"]
+    assert sig.evidence["brand_is_whole_label"] is True
+
+
+def test_typosquat_message_names_the_real_website():
+    sig = typosquat.find_typosquat_match("paypl.com", BRANDS)
+    assert "The real PayPal website is paypal.com." in sig.message
+    assert sig.evidence["real_domains"] == ["paypal.com"]
+
+
+def test_brand_name_only_as_a_substring_is_not_a_whole_label():
+    brands = [{"name": "Meta", "domains": ["meta.com"]}]
+    sig = typosquat.find_combosquat_keyword_match("metallica-fans.com", brands)
+    assert sig is not None and sig.evidence["brand_is_whole_label"] is False
+
+
+def test_shipped_brand_list_knows_singpost_and_the_real_site():
+    brands = typosquat.load_brands()
+    sigs = typosquat.run_all("xzy-singpost.com", brands)
+    assert sigs and "singpost.com" in sigs[0].message
+    assert typosquat.run_all("singpost.com", brands) == []
+    assert typosquat.run_all("www.singpost.com", brands) == []
+    assert typosquat.run_all("singpass.gov.sg", brands) == []

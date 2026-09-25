@@ -36,6 +36,15 @@ def rate(signals: "list[Signal]") -> VerdictReport:
     if len(medium) >= MEDIUM_COOCCURRENCE_THRESHOLD:
         return VerdictReport(verdict="Suspicious", signals=signals)
 
+    # A domain that carries a brand's name as its own word but is not the brand's, and whose page
+    # could not be loaded to clear it: the concern stays unresolved, so it must not read as safe.
+    # (Substring-only matches are left alone - plenty of unrelated sites contain a short brand name.)
+    if any(s.code == "fetch_failed" for s in signals) and any(
+        s.source == "typosquat" and s.severity >= Severity.MEDIUM and (s.evidence or {}).get("brand_is_whole_label")
+        for s in real_signals
+    ):
+        return VerdictReport(verdict="Suspicious", signals=signals)
+
     # "Unknown": at least one layer was actually attempted and failed, and
     # NOTHING else - not even a clean INFO signal - was gathered from any
     # source. Never fires just because the user chose to skip a layer, and

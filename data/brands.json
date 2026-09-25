@@ -65,6 +65,11 @@
     {"name": "IRCTC", "domains": ["irctc.co.in"]},
     {"name": "Nubank", "domains": ["nubank.com.br"]},
     {"name": "Itau", "domains": ["itau.com.br"]},
-    {"name": "Banco do Brasil", "domains": ["bb.com.br"]}
+    {"name": "Banco do Brasil", "domains": ["bb.com.br"]},
+    {"name": "SingPost", "domains": ["singpost.com"]},
+    {"name": "Singpass", "domains": ["singpass.gov.sg"]},
+    {"name": "DBS", "domains": ["dbs.com", "dbs.com.sg"]},
+    {"name": "OCBC", "domains": ["ocbc.com"]},
+    {"name": "UOB", "domains": ["uob.com.sg"]}
   ]
 }
