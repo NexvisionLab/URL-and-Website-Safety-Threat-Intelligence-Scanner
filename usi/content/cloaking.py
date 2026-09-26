@@ -28,6 +28,10 @@ BROWSER_USER_AGENT = (
 # substantially larger is treated as "effectively empty" for one UA.
 NEAR_EMPTY_BYTES = 200
 SIZE_RATIO_THRESHOLD = 3.0
+# If neither response reaches this size, neither is a real page - typically two block or error pages,
+# as when a site refuses this server's address outright. Comparing them says nothing about cloaking
+# (found live 2026-09-26: a genuine retailer answered 118 and 520 bytes and was flagged HIGH).
+MIN_REAL_PAGE_BYTES = 2048
 
 
 def _shape(html: str) -> dict:
@@ -86,6 +90,16 @@ def check(
         )
 
     smaller, larger = sorted([primary_size, browser_size])
+    mismatch = larger > 0 and smaller != larger and (
+        smaller <= NEAR_EMPTY_BYTES or larger / max(smaller, 1) >= SIZE_RATIO_THRESHOLD)
+    if mismatch and larger < MIN_REAL_PAGE_BYTES:
+        return Signal(
+            source="cloaking", code="cloaking_check_inconclusive", severity=Severity.INFO,
+            message=(f"Both requests got only a short response ({primary_size} and {browser_size} bytes) - "
+                     "most likely an error or block page for this server - so there was no page to compare."),
+            evidence={"tool_ua_status": primary_status, "browser_ua_status": browser_status,
+                      "tool_ua_bytes": primary_size, "browser_ua_bytes": browser_size},
+        )
     if larger > 0 and (smaller <= NEAR_EMPTY_BYTES or larger / max(smaller, 1) >= SIZE_RATIO_THRESHOLD):
         if smaller != larger:  # both same size (e.g. both 0) isn't a meaningful mismatch
             differences: "list[str] | None" = None

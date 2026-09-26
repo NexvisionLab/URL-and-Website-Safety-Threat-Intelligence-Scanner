@@ -137,3 +137,19 @@ def test_a_size_gap_without_the_tools_html_is_only_a_weak_hint(monkeypatch):
     )
     assert sig.code == "cloaking_content_size_mismatch"
     assert sig.severity == Severity.MEDIUM
+
+
+def test_two_short_block_pages_are_inconclusive_not_cloaking(monkeypatch):
+    # Found live: a genuine retailer that refuses the server's address answered 118 bytes to the tool
+    # and 520 to the browser user agent. Neither is a page; nothing was compared.
+    monkeypatch.setattr(cloaking, "capped_get", lambda session, url, timeout, max_bytes: FakeResp(200, b"x" * 520))
+    sig = cloaking.check(url="https://example.com", primary_status=200, primary_size=118,
+                         timeout=10, max_bytes=2_000_000, primary_html="<html>blocked</html>")
+    assert sig.code == "cloaking_check_inconclusive" and sig.severity == Severity.INFO
+
+
+def test_near_empty_for_the_tool_but_a_real_page_for_the_browser_is_still_cloaking(monkeypatch):
+    monkeypatch.setattr(cloaking, "capped_get", lambda session, url, timeout, max_bytes: FakeResp(200, b"x" * 40_000))
+    sig = cloaking.check(url="https://example.com", primary_status=200, primary_size=118,
+                         timeout=10, max_bytes=2_000_000, primary_html="<html></html>")
+    assert sig.code == "cloaking_content_size_mismatch" and sig.severity == Severity.HIGH
