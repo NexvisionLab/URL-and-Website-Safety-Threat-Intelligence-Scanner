@@ -4,10 +4,14 @@
     python scripts/eval_shop.py --api https://darknyx.com/api/tools/check-shop
     python scripts/eval_shop.py --only fake --workers 4 --out results.json
 
-data/shop_eval.csv lists shops confirmed fake (Watchlist Internet's
-expert-checked list), genuine shops - weighted towards small independent
-Singapore sellers, which are the hard case - and marketplaces, which
-must get the platform answer rather than a verdict.
+data/shop_eval.csv lists genuine shops - weighted towards small
+independent Singapore sellers, which are the hard case - and
+marketplaces, which must get the platform answer rather than a verdict.
+Confirmed fake shops are not in the repository: the lists they come
+from (e.g. Watchlist Internet's) may not be republished without the
+publisher's consent. Put them in data/private/*.csv (git-ignored, same
+columns) and they are read too; --csv replaces all of this with the
+files given.
 
 "Flagged" means a High or Elevated band. The targets in the design are
 at least 80% of fakes flagged and at most 2% of genuine small Singapore
@@ -42,15 +46,19 @@ def run_api(api: str, url: str) -> dict:
 
 def main(argv=None) -> int:
     p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    p.add_argument("--csv", type=Path, default=ROOT / "data" / "shop_eval.csv")
+    p.add_argument("--csv", type=Path, action="append",
+                   help="Evaluation file(s); default: data/shop_eval.csv plus data/private/*.csv")
     p.add_argument("--api", help="POST each URL to this check-shop endpoint instead of running locally")
     p.add_argument("--only", help="Only rows with this label (fake, real, platform)")
     p.add_argument("--workers", type=int, default=3)
     p.add_argument("--out", type=Path, help="Write every result as JSON here")
     args = p.parse_args(argv)
 
-    with open(args.csv, encoding="utf-8") as f:
-        rows = [r for r in csv.DictReader(f) if not args.only or r["label"] == args.only]
+    files = args.csv or [ROOT / "data" / "shop_eval.csv", *sorted((ROOT / "data" / "private").glob("*.csv"))]
+    rows = []
+    for path in files:
+        with open(path, encoding="utf-8") as f:
+            rows += [r for r in csv.DictReader(f) if not args.only or r["label"] == args.only]
 
     def check(row):
         started = time.monotonic()

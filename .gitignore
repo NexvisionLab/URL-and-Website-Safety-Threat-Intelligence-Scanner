@@ -9,3 +9,4 @@ report.md
 report.html
 cache/rdap_bootstrap.json
 data/acra_entities.sqlite3
+data/private/
