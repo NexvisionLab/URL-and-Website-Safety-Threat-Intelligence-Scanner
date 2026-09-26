@@ -9,7 +9,7 @@ from usi import pipeline
 from usi.config import Config
 from usi.lookups import rdap
 from usi.models import FetchResult, InvestigationResult, Severity, Signal, VerdictReport
-from usi.shop import address, analyzer, browser, identity, pages, render
+from usi.shop import address, analyzer, browser, fingerprint, identity, pages, render
 
 FILLER = "<p>" + "Comfortable walking pads for home and office, quiet motor, foldable frame. " * 8 + "</p>"
 FAKE_HOME = """<html><head><title>Walking Pads Clearance</title>
@@ -61,6 +61,7 @@ def stub(monkeypatch, tmp_path):
     monkeypatch.setattr(address, "first_certificate", lambda domain: state["cert"])
     monkeypatch.setattr(address, "resolve", lambda host: state["ips"])
     monkeypatch.setattr(render, "get_renderer", lambda: None)
+    monkeypatch.setenv(fingerprint.DB_ENV, str(tmp_path / "network.sqlite3"))
     state["config"] = Config(cache_path=str(tmp_path / "cache.sqlite3"))
     return state
 
@@ -234,3 +235,37 @@ def test_no_renderer_means_no_browser_calls(stub, monkeypatch):
     monkeypatch.setattr(render, "get_renderer", lambda: None)
     r = check(stub)
     assert "rendered" in r["facts"] and r["facts"]["rendered"] is False
+
+
+GA_PAGE = REAL_HOME.replace("</body>", '<script>gtag("config", "G-NETWORK123");</script>' + FILLER + "</body>")
+
+
+def test_new_shop_sharing_an_account_with_high_rated_shops_is_high(stub):
+    fingerprint.remember("fake-one.shop", "High", {("google_analytics", "G-NETWORK123")})
+    fingerprint.remember("fake-two.shop", "High", {("google_analytics", "G-NETWORK123")})
+    stub.update(html=GA_PAGE, age_days=12)
+    r = check(stub, "https://brand-new.shop/")
+    assert "shop_network_high_risk" in codes(r)
+    assert r["risk_band"] == "High" and "network_with_high_risk_shops" in {x["id"] for x in r["rules"]}
+    assert r["facts"]["network"]["shared"]["google_analytics"]["high"] == 2
+
+
+def test_established_clean_shop_copied_by_fakes_is_not_flagged(stub):
+    fingerprint.remember("fake-one.shop", "High", {("google_analytics", "G-NETWORK123")})
+    stub.update(html=GA_PAGE, age_days=4000)
+    stub["uen"] = {"201511638H": {"found": True, "uen": "201511638H", "name": "ACME TRADING PTE. LTD.",
+                                  "status": "Registered", "entity_type": "Local Company", "registered": "2015-04-30"}}
+    r = check(stub, "https://acme.sg/")
+    assert "shop_network_copied" in codes(r) and r["risk_band"] == "Low"
+
+
+def test_clean_shops_are_not_kept_and_flagged_ones_are_kept_with_their_own_band(stub):
+    fingerprint.remember("fake-one.shop", "High", {("google_analytics", "G-NETWORK123")})
+    stub.update(html=GA_PAGE, age_days=4000)
+    check(stub, "https://acme.sg/")                     # clean: not recorded
+    m = fingerprint.match("someone-else.shop", {("google_analytics", "G-NETWORK123")})
+    assert m["google_analytics"] == {"shops": 1, "high": 1, "elevated": 0}
+    stub.update(html=GA_PAGE, age_days=12)
+    check(stub, "https://another-new.shop/")            # new domain: Elevated on its own evidence, kept as such
+    m = fingerprint.match("someone-else.shop", {("google_analytics", "G-NETWORK123")})
+    assert m["google_analytics"]["shops"] == 2 and m["google_analytics"]["high"] == 1
