@@ -81,6 +81,9 @@ def rate(url_signals: "list[Signal]", shop_signals: "list[Signal]", page_examine
     if "shop_known_fake_hosting" in codes and (new or "shop_random_name" in codes):
         fire("known_fake_hosting_new_shop", HIGH,
              "A new shop on a server that security researchers reported as hosting a network of fake shops.")
+    if "shop_network_high_risk" in codes and (new or money or discount):
+        fire("network_with_high_risk_shops", HIGH,
+             "A new or suspicious shop that shares accounts or contact details with shops already rated High risk.")
     if "shop_random_name" in codes and new:
         fire("random_name_new_shop", HIGH, "A newly created shop with a name made of random letters.")
 

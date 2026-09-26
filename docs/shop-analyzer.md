@@ -73,6 +73,43 @@ Measured on genuine shops:
 - limcheeguan.sg's script-built page is read;
 - the phone-from-Facebook view matched the plain one for every genuine shop tried.
 
+## Network matching (`usi/shop/fingerprint.py`)
+
+Fake shops are run in networks - one operator, many domains - that reuse things a genuine independent shop
+doesn't share with strangers. Each analysed shop's fingerprints are:
+- **Tracking accounts:** Google Analytics, Tag Manager and Ads IDs; Facebook, TikTok and Pinterest pixels;
+  Microsoft Clarity, Hotjar and Klaviyo IDs.
+- **Store and identity details:**
+  - the underlying Shopify store name;
+  - contact email and phone (platforms' own addresses, like `support@shopify.com`, are ignored);
+  - the Singapore registration number (UEN);
+  - the server address, unless it is on a large shared platform (Cloudflare, Shopify:
+    `data/shared_hosting.json`).
+
+Page templates, themes and favicons are deliberately **not** used: thousands of genuine shops share them.
+
+**What is kept:** shops that showed warning signs of their own (High or Elevated *before* any network
+evidence) are kept in a local database (`USI_SHOP_NETWORK_DB`, default `cache/shop_network.sqlite3`) for a
+year. The record holds the shop's address, its fingerprints, when it was checked, and that band. Shops that
+check out clean are not recorded, and nothing records who asked. Reports give counts only, never which other
+shops matched.
+
+| Signal | When |
+|---|---|
+| `shop_network_high_risk` (MEDIUM) | shares a fingerprint with one or more kept shops rated High |
+| `shop_network` (LOW) | shares a fingerprint with 3+ kept shops, none rated High |
+| `shop_network_small` (INFO) | shares with 1-2 kept shops |
+| `shop_network_copied` (INFO) | an established shop (domain over a year old) with a clean record of its own shares fingerprints with High-rated shops. Fake shops copy real shops' pages, contact details and even tracking IDs included, so this is noted and never raised as a warning |
+
+Rule `network_with_high_risk_shops`: a new shop, or one with a payment or discount warning, that shares
+fingerprints with High-rated shops is High.
+
+Kept shops are stored with the band they got *before* network evidence, so two shops can never raise each
+other in a loop.
+
+The database starts empty and grows with use. Confirmed fake-shop lists can seed it once their publishers
+permit.
+
 ## Evidence from the address alone (`usi/shop/address.py`)
 
 About half the fake shops in the evaluations couldn't be examined: they answered with a bot check or were
