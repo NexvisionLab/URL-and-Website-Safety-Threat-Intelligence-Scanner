@@ -22,11 +22,13 @@ from ..models import Severity, Signal
 HIGH, ELEVATED, LOW, NOT_ENOUGH = "High", "Elevated", "Low", "Not enough information"
 _ORDER = {NOT_ENOUGH: 0, LOW: 1, ELEVATED: 2, HIGH: 3}
 
-NEW = {"shop_domain_new", "shop_catalogue_new", "shop_uen_recent"}
+NEW = {"shop_domain_new", "shop_catalogue_new", "shop_uen_recent", "shop_cert_new"}
 MONEY = {"shop_prepayment_only", "shop_payment_irreversible", "claim_payment_transfer", "claim_payment_irreversible"}
 DISCOUNT = {"shop_deep_discounts", "claim_deep_discount"}
 COPY = {"shop_brand_in_address", "shop_official_claim"}
 BAD_REGISTRATION = {"shop_uen_deregistered"}
+# Signs that need only the web address - what's left to judge when the page is blocked.
+ADDRESS_MINOR = {"shop_domain_recent", "shop_random_name", "shop_old_domain_new_site"}
 # The URL investigation's own young-domain signal duplicates shop_domain_new.
 _URL_DUPLICATES = {"young_domain"}
 # The URL engine's embedding classifier can't tell genuine shops from scam pages (its own notes: paypal.com
@@ -73,6 +75,11 @@ def rate(url_signals: "list[Signal]", shop_signals: "list[Signal]", page_examine
              "The shop borrows a known brand's name and is either newly created or selling at deep discounts.")
     if "shop_template_text" in codes and new:
         fire("template_new_shop", HIGH, "A newly created shop whose pages still contain template placeholder text.")
+    if "shop_known_fake_hosting" in codes and (new or "shop_random_name" in codes):
+        fire("known_fake_hosting_new_shop", HIGH,
+             "A new shop on a server that security researchers reported as hosting a network of fake shops.")
+    if "shop_random_name" in codes and new:
+        fire("random_name_new_shop", HIGH, "A newly created shop with a name made of random letters.")
 
     medium_shop = sorted(_codes(shop_signals, Severity.MEDIUM))
     if len(medium_shop) >= 3:
@@ -84,6 +91,10 @@ def rate(url_signals: "list[Signal]", shop_signals: "list[Signal]", page_examine
     low_only = sorted(_codes(shop_signals, Severity.LOW) - set(medium_shop))
     if len(low_only) >= 3:
         fire("several_minor_signs", ELEVATED, f"{len(low_only)} minor warning signs were found together.")
+    address_minor = sorted(codes & ADDRESS_MINOR)
+    if not page_examined and len(address_minor) >= 2:
+        fire("blocked_page_address_signs", ELEVATED,
+             "We couldn't see the shop's page, and its web address shows more than one warning sign.")
 
     if fired:
         band = max((r["band"] for r in fired), key=_ORDER.get)

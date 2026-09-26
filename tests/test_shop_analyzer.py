@@ -9,7 +9,7 @@ from usi import pipeline
 from usi.config import Config
 from usi.lookups import rdap
 from usi.models import FetchResult, InvestigationResult, Severity, Signal, VerdictReport
-from usi.shop import analyzer, identity, pages
+from usi.shop import address, analyzer, identity, pages
 
 FILLER = "<p>" + "Comfortable walking pads for home and office, quiet motor, foldable frame. " * 8 + "</p>"
 FAKE_HOME = """<html><head><title>Walking Pads Clearance</title>
@@ -36,7 +36,7 @@ def _feed(n, price, was, days_old):
 @pytest.fixture
 def stub(monkeypatch, tmp_path):
     state = {"html": FAKE_HOME, "age_days": 12, "extra": {}, "feed": None, "reachable": True,
-             "url_extra": [], "rdap": None, "uen": {}, "runs": 0}
+             "url_extra": [], "rdap": None, "uen": {}, "runs": 0, "cert": False, "ips": []}
 
     def fake_run(url, config, **kw):
         state["runs"] += 1
@@ -58,6 +58,8 @@ def stub(monkeypatch, tmp_path):
     monkeypatch.setattr(pages.Fetcher, "json", lambda self, u: state["feed"])
     monkeypatch.setattr(rdap, "registration", lambda host, cache_dir=None: state["rdap"])
     monkeypatch.setattr(identity, "lookup", lambda uen, cache_path: state["uen"].get(uen))
+    monkeypatch.setattr(address, "first_certificate", lambda domain: state["cert"])
+    monkeypatch.setattr(address, "resolve", lambda host: state["ips"])
     state["config"] = Config(cache_path=str(tmp_path / "cache.sqlite3"))
     return state
 
@@ -170,3 +172,23 @@ def test_rdap_age_used_when_whois_has_none(stub, monkeypatch):
     r = check(stub, "https://acme2.sg/")
     assert r["facts"]["domain_age_days"] == 20
     assert {"shop_domain_new", "shop_domain_registrant"} <= codes(r)
+
+
+def test_blocked_de_shop_dated_by_its_first_certificate(stub, monkeypatch):
+    # .de registries publish no registration date; the certificate log still dates the site.
+    def run_without_age(url, config, **kw):
+        kw["page_sink"]["fetch"] = FetchResult(reachable=True, http_status=403, final_url=url, text=CHALLENGE)
+        return InvestigationResult(url=url, host="x", is_onion=False, from_cache=False, checked_at=NOW.isoformat(),
+                                   verdict=VerdictReport(verdict="Likely Safe", signals=[]))
+    monkeypatch.setattr(pipeline, "run", run_without_age)
+    stub["cert"] = NOW - timedelta(days=12)
+    r = check(stub, "https://heizkoerper-profi.de/")
+    assert r["page_examined"] is False and "shop_cert_new" in codes(r)
+    assert r["risk_band"] == "Elevated" and r["facts"]["first_certificate"]
+
+
+def test_new_shop_on_known_fake_shop_server_is_high(stub):
+    stub["ips"] = ["207.244.126.19"]
+    r = check(stub)
+    assert "shop_known_fake_hosting" in codes(r)
+    assert "known_fake_hosting_new_shop" in {x["id"] for x in r["rules"]} and r["risk_band"] == "High"

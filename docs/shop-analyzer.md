@@ -37,6 +37,32 @@ result["risk_band"], result["rules"], result["signals"], result["checklist"]
 
 Everything is a normal `Signal`; INFO signals record what was checked and found in order.
 
+## Evidence from the address alone (`usi/shop/address.py`)
+
+About half the fake shops in the evaluations couldn't be examined: they answered with a bot check or were
+already down. An honest browser doesn't help there (tested 2026-09-26 with headless Chromium, no evasion:
+Cloudflare-protected shops stayed blocked), and this tool doesn't try to get around bot protection. What
+the address itself shows still counts:
+
+| Check | Signal |
+|---|---|
+| First certificate in Certificate Transparency logs (crt.sh) - an age even for `.de`/`.at` domains, whose registries publish none | `shop_cert_new` (< 90 days, MEDIUM; counts as a newness sign), `shop_old_domain_new_site` (domain 2+ years old, first certificate < 90 days: an old address only now used as a website, LOW) |
+| A name that reads as random letters, scored against letter pairs of real website names (`data/name_bigrams.json`, built from the Tranco list by `scripts/build_name_model.py`) | `shop_random_name` (LOW) |
+| The server is one that security researchers published as hosting a fake-shop network (`data/fake_shop_hosting.json`; exact addresses only) | `shop_known_fake_hosting` (MEDIUM) |
+
+The certificate lookup is best-effort. crt.sh is a free community service and was often overloaded when
+this was measured (2026-09-26: 6-16 s for small shops, 502 errors, and timeouts on large sites with
+thousands of certificates - 44 of 53 genuine shops got no answer). It is capped at 10 s, runs alongside the
+page checks, and a failed lookup is only noted. A dependable source would be our own record of the
+certificate logs (for example certstream on the server), which belongs with the network-matching work.
+
+On the 51 genuine shops in the evaluation files none of the three address checks fired; the one genuine shop
+flagged (littlefarms.com) is flagged by the URL investigation's `brand_impersonation` rule, as before.
+
+The random-name score is deliberately a minor sign: on names of 6-9 random letters it catches about a third
+at a cut-off that flags 0.5% of real website names, and short names carry too little evidence. It matters in
+combination: a new shop with a generated name is High, and two address signs on a blocked page are Elevated.
+
 ## Risk bands (`usi/shop/rules.py`)
 
 Named rules, never a summed score. The band is the highest any rule reaches, and every rule that fired is
