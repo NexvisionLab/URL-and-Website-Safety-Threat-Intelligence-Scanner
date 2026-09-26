@@ -88,9 +88,11 @@ company-format UEN numbered this year that isn't found yet is only a LOW sign.
 
 ## Evaluation
 
-`scripts/eval_shop.py` runs the analyzer over `data/shop_eval.csv`: 40 shops from Watchlist Internet's
-expert-checked list of fraudulent shops, 22 independent Singapore shops, 3 Singapore retailers, 8
-German-language shops and 2 marketplaces. Run on 2026-09-25:
+`scripts/eval_shop.py` runs the analyzer over `data/shop_eval.csv` (22 independent Singapore shops, 3
+Singapore retailers, 8 German-language shops, 2 marketplaces) plus any confirmed-fake lists in
+`data/private/` (git-ignored). The fake shops used below came from Watchlist Internet's expert-checked
+list of fraudulent shops; its terms don't allow republishing the list without the publisher's consent,
+so it is not in this repository. Run on 2026-09-25, with 40 of those fake shops:
 
 | Group | Page loaded | Flagged (High or Elevated) |
 |---|---|---|
@@ -101,7 +103,20 @@ German-language shops and 2 marketplaces. Run on 2026-09-25:
 | Marketplaces | - | 2 of 2 answered as platforms |
 
 The same set was used to tune the rules (the bot-page, script-built-page and "everything on sale"
-handling all came from it), so these figures are optimistic. The next evaluation needs a held-out set.
+handling all came from it), so these figures are optimistic.
+
+Held-out check, 2026-09-26, with the rules unchanged: the 40 most recently listed fake shops that were
+not in the first set (listed 18-25 September, taken in list order) and 20 more independent Singapore
+shops, each matched to a registered company in ACRA's register:
+
+| Group | Page loaded | Flagged (High or Elevated) |
+|---|---|---|
+| Fake shops | 19 of 40 | 14 of 19 (74%), 4 High; 21 of all 40 (53%) |
+| Independent Singapore shops | 20 | 1 (5%) - by the URL investigation's `brand_impersonation` rule ("Apple" on a page with a login field), not by a shop rule |
+
+The drop comes mostly from fake shops whose page can't be examined (bot checks, sites already down)
+and whose domains are 3-12 months old, which leaves only a minor age sign. A rendering browser (next
+phase) is the biggest lever.
 For comparison, the URL verdict alone flagged 0 of the 8 fake shops tested on the same day.
 
 Known gaps: German B2B-style fake shops (machinery, firewood, heating oil) with a complete-looking

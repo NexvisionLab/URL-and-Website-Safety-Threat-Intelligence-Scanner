@@ -10,8 +10,9 @@
   social-media and chat links get MHA's platform safety rating and seller advice instead of a verdict.
   See `docs/shop-analyzer.md`.
 - `usi/lookups/rdap.py`: RDAP registration lookup through IANA's bootstrap list.
-- `scripts/eval_shop.py` with `data/shop_eval.csv` (40 confirmed fake shops, 33 genuine shops,
-  2 marketplaces), and `scripts/update_acra.py` to build a local copy of ACRA's register.
+- `scripts/eval_shop.py` with `data/shop_eval.csv` (33 genuine shops, 2 marketplaces; confirmed
+  fake-shop lists are read from the git-ignored `data/private/`, because their publishers' terms
+  don't allow republishing them), and `scripts/update_acra.py` to build a local copy of ACRA's register.
 - `pipeline.run(page_sink=...)`: hands the fetched page to a caller that analyses it further.
 
 ### Changed
