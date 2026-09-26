@@ -7,3 +7,5 @@ config.toml
 *.egg-info/
 report.md
 report.html
+cache/rdap_bootstrap.json
+data/acra_entities.sqlite3

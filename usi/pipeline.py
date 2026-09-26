@@ -53,7 +53,13 @@ def run(
     no_store: bool = False,
     cache_ttl_hours: "int | None" = None,
     brands_path=None,
+    page_sink: "dict | None" = None,
 ) -> InvestigationResult:
+    """`page_sink`, when given, receives the live fetch ("fetch": the
+    FetchResult) so a caller that analyses the same page further - the
+    shop analyzer - doesn't have to download it a second time. Left
+    untouched when no fetch happened (offline, --no-fetch, or a cached
+    result)."""
     url, host = normalize_target(raw_target)
     is_onion = host.lower().endswith(".onion")
     ttl = cache_ttl_hours if cache_ttl_hours is not None else config.cache_ttl_hours
@@ -119,6 +125,8 @@ def run(
                 url, timeout=config.fetch_timeout_seconds, max_bytes=config.fetch_max_bytes,
                 user_agent=config.fetch_user_agent, tor_proxy=tor_proxy,
             )
+            if page_sink is not None:
+                page_sink["fetch"] = fetch_result
             if not fetch_result.reachable:
                 signals.append(Signal(
                     source="fetch", code="fetch_failed", severity=Severity.INFO,

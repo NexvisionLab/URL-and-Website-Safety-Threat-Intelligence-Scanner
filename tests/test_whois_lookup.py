@@ -1,6 +1,15 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
-from usi.lookups import whois_lookup
+import pytest
+
+from usi.lookups import rdap, whois_lookup
+
+
+@pytest.fixture(autouse=True)
+def no_rdap(monkeypatch):
+    """The RDAP fallback would otherwise make a real network call whenever
+    a test's WHOIS stub returns nothing; tests that want it replace this."""
+    monkeypatch.setattr(rdap, "registration", lambda host, cache_dir=None: None)
 
 
 class FakeWhoisResult:
@@ -149,3 +158,50 @@ def test_no_usable_data_returns_unavailable(monkeypatch):
     signals = whois_lookup.lookup("test.com")
     assert len(signals) == 1
     assert signals[0].code == "whois_unavailable"
+
+
+def _rdap_data(created, expires=None, registrar="Example Registrar"):
+    return {"created": created, "expires": expires, "last_changed": None,
+            "registrar": registrar, "registrant": None, "domain": "shop.sg", "server": "x"}
+
+
+def test_rdap_fills_in_when_whois_has_no_data(monkeypatch):
+    # .sg: python-whois returns nothing usable, RDAP does.
+    monkeypatch.setattr(whois_lookup.whois, "whois", lambda host: FakeWhoisResult())
+    created = datetime.now(timezone.utc) - timedelta(days=5)
+    monkeypatch.setattr(rdap, "registration", lambda host, cache_dir=None: _rdap_data(created))
+    signals = whois_lookup.lookup("shop.sg")
+    young = [s for s in signals if s.code == "young_domain"]
+    assert young and young[0].evidence["via"] == "rdap"
+    assert "whois_unavailable" not in {s.code for s in signals}
+
+
+def test_rdap_fills_in_when_whois_raises(monkeypatch):
+    def boom(host):
+        raise Exception("no whois server")
+    monkeypatch.setattr(whois_lookup.whois, "whois", boom)
+    created = datetime.now(timezone.utc) - timedelta(days=4000)
+    monkeypatch.setattr(rdap, "registration",
+                        lambda host, cache_dir=None: _rdap_data(created, created + timedelta(days=365)))
+    codes = {s.code for s in whois_lookup.lookup("shop.sg")}
+    assert {"domain_age", "short_registration_period", "registrar"} <= codes
+
+
+def test_rdap_crash_still_reports_unavailable(monkeypatch):
+    monkeypatch.setattr(whois_lookup.whois, "whois", lambda host: FakeWhoisResult())
+
+    def broken(host, cache_dir=None):
+        raise RuntimeError("bad data")
+    monkeypatch.setattr(rdap, "registration", broken)
+    signals = whois_lookup.lookup("shop.sg")
+    assert [s.code for s in signals] == ["whois_unavailable"]
+
+
+def test_whois_result_is_used_without_calling_rdap(monkeypatch):
+    result = FakeWhoisResult(creation_date=datetime.now() - timedelta(days=900), registrar="R")
+    monkeypatch.setattr(whois_lookup.whois, "whois", lambda host: result)
+
+    def must_not_run(host, cache_dir=None):
+        raise AssertionError("RDAP should only be a fallback")
+    monkeypatch.setattr(rdap, "registration", must_not_run)
+    assert "domain_age" in {s.code for s in whois_lookup.lookup("test.com")}
