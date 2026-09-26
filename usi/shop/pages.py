@@ -17,7 +17,7 @@ from bs4 import BeautifulSoup
 from ..lookups.rdap import registrable_domain
 from ..net import build_session, capped_get
 
-MAX_EXTRA_PAGES = 4
+MAX_EXTRA_PAGES = 5
 PAGE_TIMEOUT_SECONDS = 10
 PAGE_MAX_BYTES = 1_000_000
 JSON_MAX_BYTES = 3_000_000
@@ -35,9 +35,12 @@ PAGE_KINDS = (
     ("privacy", r"privacy|datenschutz|confidentialit|privacidad"),
 )
 _KIND_RES = [(k, re.compile(p, re.I)) for k, p in PAGE_KINDS]
+# A product page shows the price, the "add to cart" area and often the payment badges. Matched on the
+# path only: navigation text like "Products" would otherwise pick a category page.
+_PRODUCT_PATH = re.compile(r"/(?:products?|p|item|artikel|produkt|produit|producto)/[^/?#]+", re.I)
 # Pages worth fetching: the ones that name who runs the shop and how it
 # treats buyers. Privacy and shipping pages are only noted as present.
-_FETCH_KINDS = ("contact", "about", "refund", "terms")
+_FETCH_KINDS = ("contact", "about", "refund", "terms", "product")
 
 
 @dataclass
@@ -105,6 +108,11 @@ def classify_links(page: Page, host: str) -> "dict[str, list[str]]":
         if not url.startswith(("http://", "https://")) or not same_site(url, host):
             continue
         path = urlparse(url).path.lower()
+        if _PRODUCT_PATH.search(path):
+            bucket = found.setdefault("product", [])
+            if url not in bucket:
+                bucket.append(url)
+            continue
         haystack = f"{text.lower()} {path}"
         for kind, rx in _KIND_RES:
             if rx.search(haystack):
