@@ -37,6 +37,42 @@ result["risk_band"], result["rules"], result["signals"], result["checklist"]
 
 Everything is a normal `Signal`; INFO signals record what was checked and found in order.
 
+## Rendering in a browser (`usi/shop/browser.py`, `usi/shop/render.py`)
+
+Optional. With `USI_RENDER_URL` (a render service, as DarkNyx runs it) or `USI_RENDER_LOCAL=1`
+(`pip install -r requirements-render.txt`, then `playwright install chromium`, or point `USI_CHROMIUM_PATH`
+at an installed Chrome), the analyzer uses headless Chromium in two cases:
+
+- **The plain fetch can't read the shop:** the page is built by script, or its footer (contact and policy
+  links) is added by script. The rendered page is then read instead. Its linked pages are still fetched
+  plainly, so missing contact details on a rendered shop are only noted (`shop_contact_not_found`),
+  never weighed.
+- **Every shop gets a second look as a phone visitor arriving from a Facebook link.** Some fake-shop
+  campaigns show their storefront only to that visitor and an error page to everyone else:
+  - `shop_cloaked_for_ads` (HIGH): an error or blank page for the plain visitor, a storefront for the
+    phone-from-Facebook visitor;
+  - `shop_redirects_ad_visitors` (MEDIUM): phone visitors are sent to a different website.
+
+  A bot check on either view is not treated as cloaking.
+
+One product page (`/products/...`, `/product/...`, ...) now joins the linked pages read for payment and
+contact details.
+
+The browser only looks:
+- it never clicks, types or submits, and refuses downloads;
+- it doesn't load images, media or fonts;
+- it refuses every request to a non-public address, including requests from the page's own scripts and
+  WebSockets. Tested 2026-09-26: a page's scripts trying `fetch` to localhost, `fetch` to 192.168.1.1 and
+  a WebSocket to localhost produced no connection at a listener on the target port;
+- it identifies as headless Chrome. The phone view uses a phone's user agent, because that view is the
+  point of the check. Nothing is masked and no bot check is solved, so a shop behind an interactive
+  challenge stays unexamined.
+
+Measured on genuine shops:
+- tangs.com's script-added footer now yields its phone number and address;
+- limcheeguan.sg's script-built page is read;
+- the phone-from-Facebook view matched the plain one for every genuine shop tried.
+
 ## Evidence from the address alone (`usi/shop/address.py`)
 
 About half the fake shops in the evaluations couldn't be examined: they answered with a bot check or were

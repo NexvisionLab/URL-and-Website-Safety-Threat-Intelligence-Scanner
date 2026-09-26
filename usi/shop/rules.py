@@ -63,6 +63,9 @@ def rate(url_signals: "list[Signal]", shop_signals: "list[Signal]", page_examine
     if uen_not_found_high or codes & BAD_REGISTRATION:
         fire("registration_invalid", HIGH,
              "The business registration number on the site doesn't belong to a currently registered business.")
+    if "shop_cloaked_for_ads" in codes:
+        fire("cloaked_for_ads", HIGH,
+             "The shop hides its storefront from everyone except phone visitors arriving from Facebook ads.")
     if "claim_payment_irreversible" in codes:
         fire("irreversible_payment_requested", HIGH, "You were asked to pay by crypto or gift cards.")
     if new and money:

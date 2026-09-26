@@ -3,6 +3,15 @@
 ## Unreleased
 
 ### Added
+- Optional browser rendering for the shop analyzer (`usi/shop/browser.py`, `usi/shop/render.py`,
+  `requirements-render.txt`):
+  - script-built pages and script-added footers are read through headless Chromium;
+  - every shop gets a phone-from-Facebook view, to catch storefronts shown only to ad visitors
+    (`shop_cloaked_for_ads`, `shop_redirects_ad_visitors`);
+  - one product page joins the linked pages read.
+
+  The browser refuses every request to non-public addresses, WebSockets included, and never clicks,
+  submits or evades bot checks. Enabled with `USI_RENDER_URL` (render service) or `USI_RENDER_LOCAL=1`.
 - Address-level shop evidence (`usi/shop/address.py`) for shops whose page can't be examined: first
   certificate date from Certificate Transparency logs, random-letter names (letter-pair model built from
   the Tranco list, `scripts/build_name_model.py`), and servers published as fake-shop hosting

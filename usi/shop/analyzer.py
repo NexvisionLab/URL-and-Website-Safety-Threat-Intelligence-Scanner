@@ -22,7 +22,7 @@ from ..config import Config
 from ..lookups import rdap
 from ..models import Severity, Signal
 from ..output.formatter import signal_from_dict, signal_to_dict
-from . import address, brands, catalogue, claims, contact, identity, pages, payment, platforms, rules
+from . import address, brands, browser, catalogue, claims, contact, identity, pages, payment, platforms, render, rules
 
 AGE_SOURCE = "shop_age"
 NEW_DOMAIN_DAYS = 90
@@ -90,7 +90,10 @@ def _host_checks(host: str, url_signals: "list[Signal]", reg: "dict | None") -> 
 
 
 def _page_checks(main: pages.Page, host: str, fetcher: pages.Fetcher, pool: ThreadPoolExecutor,
-                 age_days: "int | None", config: Config, truncated: bool = False) -> "tuple[list[Signal], dict]":
+                 age_days: "int | None", config: Config, truncated: bool = False,
+                 rendered: bool = False) -> "tuple[list[Signal], dict]":
+    """`rendered`: the main page needed a browser. Its linked pages are still fetched plainly and may be
+    script-built too, so missing contact details there are only noted, not weighed."""
     facts: dict = {}
     links_by_kind = pages.classify_links(main, host)
     platform = catalogue.detect_platform(main.html)
@@ -140,7 +143,7 @@ def _page_checks(main: pages.Page, host: str, fetcher: pages.Fetcher, pool: Thre
             message="The shop's front page is too large to read in full, so missing contact details or policies aren't counted.",
         ))
     elif readable:
-        signals += contact.contact_signals(contacts, footer_seen=bool(links_by_kind))
+        signals += contact.contact_signals(contacts, footer_seen=bool(links_by_kind) and not rendered)
         signals += contact.policy_signals(links_by_kind)
     else:
         signals.append(Signal(
@@ -183,7 +186,24 @@ def _shop_checks(url: str, host: str, fetch_result, url_signals: "list[Signal]",
     fetcher = pages.Fetcher(config.fetch_user_agent,
                             tor_proxy=config.tor_proxy if (is_onion or config.tor_enabled) else None)
     main = _examinable(fetch_result)
+    renderer = None if is_onion else render.get_renderer()
+    rendered_desktop = None
+    used_render = False
+    footer_links = bool(main is not None and pages.classify_links(main, host))
+    if renderer is not None and (main is None or not pages.is_readable(main) or not footer_links):
+        # The plain fetch couldn't read the page, or its footer (contact and policy links) is added
+        # by script: try a real browser. It can't get past an interactive bot check (and doesn't
+        # try to), but it does run script-built shops.
+        rendered_desktop = renderer.render(url, "desktop")
+        page = render.as_page(rendered_desktop)
+        plain_readable = main is not None and pages.is_readable(main)
+        if page is not None and (
+                main is None                                                   # plain fetch got nothing usable
+                or (not plain_readable and pages.is_readable(page))            # script-built page
+                or (plain_readable and pages.classify_links(page, host))):     # footer added by script
+            main, used_render = page, True
     with ThreadPoolExecutor(max_workers=6, thread_name_prefix="shop") as pool:
+        phone_future = pool.submit(renderer.render, url, "phone_facebook") if renderer is not None else None
         rdap_future = None if is_onion else pool.submit(rdap.registration, host)
         try:
             reg = rdap_future.result() if rdap_future else None
@@ -194,11 +214,25 @@ def _shop_checks(url: str, host: str, fetch_result, url_signals: "list[Signal]",
         # alongside the page checks; it is what's left to go on when the page itself is blocked.
         address_future = None if is_onion else pool.submit(address.check, host, facts["domain_age_days"])
         if main is not None:
-            truncated = len((fetch_result.text or "").encode("utf-8", errors="ignore")) >= config.fetch_max_bytes - 4096
+            truncated = not used_render and (
+                len((fetch_result.text or "").encode("utf-8", errors="ignore")) >= config.fetch_max_bytes - 4096)
             page_signals, page_facts = _page_checks(main, host, fetcher, pool, facts["domain_age_days"], config,
-                                                    truncated=truncated)
+                                                    truncated=truncated, rendered=used_render)
             signals += page_signals
             facts.update(page_facts)
+        if phone_future is not None:
+            try:
+                phone = phone_future.result()
+            except Exception:  # noqa: BLE001 - the phone view is optional
+                phone = None
+            if phone is not None:
+                desktop_view = rendered_desktop or browser.Rendered(
+                    ok=bool(fetch_result and fetch_result.reachable), profile="desktop",
+                    status=getattr(fetch_result, "http_status", None), final_url=getattr(fetch_result, "final_url", None),
+                    html=(getattr(fetch_result, "text", None) or ""))
+                signals += render.compare_views(desktop_view, phone)
+                facts["phone_view"] = {"status": phone.status, "error": phone.error}
+        facts["rendered"] = used_render
         if address_future is not None:
             try:
                 address_signals, address_facts = address_future.result()

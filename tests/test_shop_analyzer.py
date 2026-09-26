@@ -9,7 +9,7 @@ from usi import pipeline
 from usi.config import Config
 from usi.lookups import rdap
 from usi.models import FetchResult, InvestigationResult, Severity, Signal, VerdictReport
-from usi.shop import address, analyzer, identity, pages
+from usi.shop import address, analyzer, browser, identity, pages, render
 
 FILLER = "<p>" + "Comfortable walking pads for home and office, quiet motor, foldable frame. " * 8 + "</p>"
 FAKE_HOME = """<html><head><title>Walking Pads Clearance</title>
@@ -60,6 +60,7 @@ def stub(monkeypatch, tmp_path):
     monkeypatch.setattr(identity, "lookup", lambda uen, cache_path: state["uen"].get(uen))
     monkeypatch.setattr(address, "first_certificate", lambda domain: state["cert"])
     monkeypatch.setattr(address, "resolve", lambda host: state["ips"])
+    monkeypatch.setattr(render, "get_renderer", lambda: None)
     state["config"] = Config(cache_path=str(tmp_path / "cache.sqlite3"))
     return state
 
@@ -192,3 +193,44 @@ def test_new_shop_on_known_fake_shop_server_is_high(stub):
     r = check(stub)
     assert "shop_known_fake_hosting" in codes(r)
     assert "known_fake_hosting_new_shop" in {x["id"] for x in r["rules"]} and r["risk_band"] == "High"
+
+
+class FakeRenderer:
+    def __init__(self, views):
+        self.views = views
+        self.calls = []
+
+    def render(self, url, profile):
+        self.calls.append(profile)
+        status, html = self.views[profile]
+        return browser.Rendered(ok=True, profile=profile, status=status, final_url=url, title="", html=html)
+
+
+def test_script_built_page_is_read_through_the_browser(stub, monkeypatch):
+    stub.update(html=SCRIPTED_HOME, age_days=4000)
+    full = REAL_HOME.replace("</body>", FILLER + "</body>")
+    fake = FakeRenderer({"desktop": (200, full), "phone_facebook": (200, full)})
+    monkeypatch.setattr(render, "get_renderer", lambda: fake)
+    stub["uen"] = {"201511638H": {"found": True, "uen": "201511638H", "name": "ACME TRADING PTE. LTD.",
+                                  "status": "Registered", "entity_type": "Local Company", "registered": "2015-04-30"}}
+    r = check(stub, "https://acme.sg/")
+    assert r["facts"]["rendered"] is True and "shop_uen_verified" in codes(r)
+    assert "shop_views_consistent" in codes(r) and r["risk_band"] == "Low"
+    assert sorted(fake.calls) == ["desktop", "phone_facebook"]
+
+
+def test_storefront_shown_only_to_facebook_phone_visitors_is_high(stub, monkeypatch):
+    stub.update(html="<html><head><title>404</title></head><body>Not Found</body></html>", age_days=4000)
+    storefront = FAKE_HOME
+    fake = FakeRenderer({"desktop": (404, "<html><head><title>404</title></head><body>Not Found</body></html>"),
+                         "phone_facebook": (200, storefront)})
+    monkeypatch.setattr(render, "get_renderer", lambda: fake)
+    r = check(stub)
+    assert "shop_cloaked_for_ads" in codes(r)
+    assert r["risk_band"] == "High" and "cloaked_for_ads" in {x["id"] for x in r["rules"]}
+
+
+def test_no_renderer_means_no_browser_calls(stub, monkeypatch):
+    monkeypatch.setattr(render, "get_renderer", lambda: None)
+    r = check(stub)
+    assert "rendered" in r["facts"] and r["facts"]["rendered"] is False
