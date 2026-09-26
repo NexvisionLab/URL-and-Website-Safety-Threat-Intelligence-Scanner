@@ -22,7 +22,7 @@ from ..config import Config
 from ..lookups import rdap
 from ..models import Severity, Signal
 from ..output.formatter import signal_from_dict, signal_to_dict
-from . import brands, catalogue, claims, contact, identity, pages, payment, platforms, rules
+from . import address, brands, catalogue, claims, contact, identity, pages, payment, platforms, rules
 
 AGE_SOURCE = "shop_age"
 NEW_DOMAIN_DAYS = 90
@@ -190,12 +190,22 @@ def _shop_checks(url: str, host: str, fetch_result, url_signals: "list[Signal]",
         except Exception:  # noqa: BLE001 - registration data is optional here
             reg = None
         signals, facts = _host_checks(host, url_signals, reg)
+        # Address-level evidence (certificate history, known fake-shop hosting, generated names) runs
+        # alongside the page checks; it is what's left to go on when the page itself is blocked.
+        address_future = None if is_onion else pool.submit(address.check, host, facts["domain_age_days"])
         if main is not None:
             truncated = len((fetch_result.text or "").encode("utf-8", errors="ignore")) >= config.fetch_max_bytes - 4096
             page_signals, page_facts = _page_checks(main, host, fetcher, pool, facts["domain_age_days"], config,
                                                     truncated=truncated)
             signals += page_signals
             facts.update(page_facts)
+        if address_future is not None:
+            try:
+                address_signals, address_facts = address_future.result()
+            except Exception:  # noqa: BLE001 - address evidence is optional; never fail the check over it
+                address_signals, address_facts = [], {}
+            signals += address_signals
+            facts.update(address_facts)
     return signals, facts, main is not None
 
 

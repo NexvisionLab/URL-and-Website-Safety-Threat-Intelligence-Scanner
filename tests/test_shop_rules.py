@@ -76,3 +76,19 @@ def test_url_findings_carry_over():
 def test_url_young_domain_is_not_double_counted():
     band, ids = rate([sig("shop_domain_new")], url=[sig("young_domain", Severity.MEDIUM, source="whois")])
     assert band == "Elevated" and ids == ["warning_sign"]
+
+
+def test_new_certificate_counts_as_new():
+    band, ids = rate([sig("shop_cert_new"), sig("shop_prepayment_only")])
+    assert band == "High" and "new_shop_unprotected_payment" in ids
+
+
+def test_random_name_on_new_shop_is_high_but_alone_is_minor():
+    assert "random_name_new_shop" in rate([sig("shop_random_name", Severity.LOW), sig("shop_domain_new")])[1]
+    assert rate([sig("shop_random_name", Severity.LOW)]) == ("Low", [])
+
+
+def test_two_address_signs_on_a_blocked_page_are_elevated():
+    signs = [sig("shop_domain_recent", Severity.LOW), sig("shop_random_name", Severity.LOW)]
+    assert rate(signs, examined=False) == ("Elevated", ["blocked_page_address_signs"])
+    assert rate(signs, examined=True) == ("Low", [])

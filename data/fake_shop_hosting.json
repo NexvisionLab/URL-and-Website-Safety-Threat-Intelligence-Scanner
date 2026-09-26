@@ -1,0 +1,12 @@
+{
+  "_comment": "Server addresses published by security researchers as hosting networks of fake shops, used by usi/shop/address.py. Exact addresses only - the surrounding ranges belong to large hosting providers with legitimate customers. Each entry keeps its source; addresses change hands, so an old report weighs less over time.",
+  "sources": [
+    {
+      "publisher": "Malwarebytes",
+      "published": "March 2026",
+      "title": "Inside a network of 20,000+ fake shops (Indicators of Compromise)",
+      "url": "https://www.malwarebytes.com/blog/scams/2026/03/inside-a-network-of-20000-fake-shops",
+      "addresses": ["108.59.1.151", "108.59.12.118", "108.59.14.13", "108.59.8.97", "108.62.0.220", "108.62.116.82", "108.62.117.45", "162.210.195.105", "162.210.195.113", "162.210.198.37", "162.210.199.12", "162.210.199.183", "162.210.199.235", "192.96.200.81", "198.7.58.168", "198.7.58.87", "199.115.115.2", "207.244.102.13", "207.244.109.109", "207.244.126.106", "207.244.126.19", "207.244.126.21", "207.244.67.158", "207.244.69.201", "207.244.71.143", "207.244.89.198", "207.244.91.203", "23.105.160.43", "23.105.172.14", "23.105.8.15", "23.105.8.17", "23.105.8.19", "23.82.11.26", "23.82.13.161", "23.82.13.34", "5.79.69.45"]
+    }
+  ]
+}

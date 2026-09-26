@@ -3,6 +3,11 @@
 ## Unreleased
 
 ### Added
+- Address-level shop evidence (`usi/shop/address.py`) for shops whose page can't be examined: first
+  certificate date from Certificate Transparency logs, random-letter names (letter-pair model built from
+  the Tranco list, `scripts/build_name_model.py`), and servers published as fake-shop hosting
+  (`data/fake_shop_hosting.json`, Malwarebytes, March 2026). New rules: a new shop with a generated name
+  or on known fake-shop hosting is High; two address signs on a blocked page are Elevated.
 - Shop analyzer (`usi/shop/`, `python -m usi.shop`): registration and catalogue age, discount depth
   from Shopify and WooCommerce product feeds, payment methods, contact details and policies, template
   leftovers, unlinked trust badges, retailer names in the address, and Singapore UEN checks against
