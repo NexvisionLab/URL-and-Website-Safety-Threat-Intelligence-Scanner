@@ -21,6 +21,10 @@
 - `pipeline.run(page_sink=...)`: hands the fetched page to a caller that analyses it further.
 
 ### Changed
+- The cloaking check no longer reports a size difference between two short responses (both under 2 KB,
+  typically block or error pages when a site refuses the server) as cloaking; it reports
+  `cloaking_check_inconclusive` instead. Found live: a genuine retailer that blocks the scanner's
+  address was flagged HIGH on 118 vs 520 bytes, turning both the URL and shop verdicts to a warning.
 - WHOIS falls back to RDAP when python-whois returns no registration data, so `.sg` domains (and
   other ccTLDs python-whois can't parse) now get a domain age. Signal codes are unchanged; the
   evidence carries `"via": "rdap"`.
