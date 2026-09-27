@@ -3,6 +3,16 @@
 ## Unreleased
 
 ### Added
+- Network matching for the shop analyzer (`usi/shop/fingerprint.py`):
+  - **Fingerprints:** tracking accounts, the Shopify store name, contact email and phone, UEN, and the
+    server address (except on shared platforms, `data/shared_hosting.json`).
+  - **What is kept:** only shops that showed warning signs of their own, kept for a year in
+    `USI_SHOP_NETWORK_DB`. Clean shops are not recorded, nothing records who asked, and reports carry
+    counts only.
+  - **Signals:** `shop_network_high_risk` (MEDIUM), plus the `network_with_high_risk_shops` rule for new or
+    otherwise suspicious shops.
+  - **Established clean shops:** they can't be raised by network evidence (`shop_network_copied`), because
+    fakes copy real shops.
 - Optional browser rendering for the shop analyzer (`usi/shop/browser.py`, `usi/shop/render.py`,
   `requirements-render.txt`):
   - script-built pages and script-added footers are read through headless Chromium;

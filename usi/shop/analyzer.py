@@ -22,7 +22,8 @@ from ..config import Config
 from ..lookups import rdap
 from ..models import Severity, Signal
 from ..output.formatter import signal_from_dict, signal_to_dict
-from . import address, brands, browser, catalogue, claims, contact, identity, pages, payment, platforms, render, rules
+from . import (address, brands, browser, catalogue, claims, contact, fingerprint, identity, pages, payment, platforms,
+               render, rules)
 
 AGE_SOURCE = "shop_age"
 NEW_DOMAIN_DAYS = 90
@@ -166,6 +167,7 @@ def _page_checks(main: pages.Page, host: str, fetcher: pages.Fetcher, pool: Thre
     facts["presents_as_singaporean"] = singaporean
     haystack = " ".join([host, main.title or ""] + texts)
     signals += identity.signals(uens, lookups, singaporean, haystack)
+    facts["_prints"] = sorted(fingerprint.extract(all_pages, contacts, uens, []))
     return signals, facts
 
 
@@ -243,6 +245,25 @@ def _shop_checks(url: str, host: str, fetch_result, url_signals: "list[Signal]",
     return signals, facts, main is not None
 
 
+def _network(host: str, url_signals: "list[Signal]", shop_signals: "list[Signal]", facts: dict,
+             page_examined: bool, remember: bool = True) -> "list[Signal]":
+    """Compare this shop's fingerprints with the shops already checked, then remember it. Other shops are
+    judged by the band they got before any network evidence, so shops can never raise each other in a loop."""
+    prints = {tuple(p) for p in facts.pop("_prints", [])}
+    prints |= fingerprint.extract([], {}, [], facts.get("addresses") or [])
+    site = fingerprint.site_key(host)
+    base_band, _ = rules.rate(url_signals, shop_signals, page_examined)
+    matches = fingerprint.match(site, prints)
+    age = facts.get("domain_age_days")
+    established_and_clean = base_band == rules.LOW and isinstance(age, int) and age >= 365
+    # Only shops with warning signs of their own are kept: those are what a new shop is compared against.
+    # A shop that checks out clean isn't recorded at all, and no record says who checked anything.
+    if remember and prints and base_band in (rules.HIGH, rules.ELEVATED):
+        fingerprint.remember(site, base_band, prints)
+    facts["network"] = {"fingerprints": len(prints), "shared": matches}
+    return fingerprint.signals(matches, established_and_clean)
+
+
 def _checklist(signals: "list[Signal]") -> "list[str]":
     codes = {s.code for s in signals}
     items = [
@@ -299,6 +320,7 @@ def investigate_shop(raw_target: str, config: Config, *, buyer_claims: "dict | N
         base = pipeline.run(url, config, no_cache=True, no_store=no_store, page_sink=sink)
         url_signals = list(base.verdict.signals)
         shop_signals, facts, page_examined = _shop_checks(url, host, sink.get("fetch"), url_signals, config)
+        shop_signals += _network(host, url_signals, shop_signals, facts, page_examined, remember=not no_store)
         part = {
             "url": url, "host": host, "checked_at": base.checked_at,
             "page_examined": page_examined,
