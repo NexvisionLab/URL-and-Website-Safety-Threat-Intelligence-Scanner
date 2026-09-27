@@ -77,3 +77,37 @@ def test_no_known_hashes_returns_none():
         user_agent="test", brands=[], known_hashes={},
     )
     assert sig is None
+
+
+def _fake_favicon(monkeypatch):
+    import requests
+
+    class FakeResp:
+        status_code = 200
+
+        class raw:
+            @staticmethod
+            def read(n, decode_content=True):
+                return b"x" * 100
+
+    monkeypatch.setattr(requests, "get", lambda *a, **k: FakeResp())
+    monkeypatch.setattr("usi.content.favicon.hashlib.md5", lambda content: type("H", (), {"hexdigest": lambda self: "deadbeef"})())
+
+
+BRANDS_FOR_ORG_PAGES = [{"name": "Microsoft", "domains": ["microsoft.com"]}, {"name": "PayPal", "domains": ["paypal.com"]}]
+HASHES_FOR_ORG_PAGES = {"Microsoft": {"domain": "microsoft.com", "md5": "deadbeef"}, "PayPal": {"domain": "paypal.com", "md5": "deadbeef"}}
+
+
+def test_a_brands_own_github_pages_site_may_use_its_favicon(monkeypatch):
+    _fake_favicon(monkeypatch)
+    sig = favicon.check(host="microsoft.github.io", favicon_url="https://microsoft.github.io/favicon.ico", user_agent="test",
+                        brands=BRANDS_FOR_ORG_PAGES, known_hashes=HASHES_FOR_ORG_PAGES)
+    assert sig is None
+
+
+def test_the_same_favicon_on_a_lookalike_or_a_claimable_name_is_still_flagged(monkeypatch):
+    _fake_favicon(monkeypatch)
+    for host in ("microsoft-login.github.io", "paypal.weebly.com", "evil.example.net"):
+        sig = favicon.check(host=host, favicon_url=f"https://{host}/favicon.ico", user_agent="test",
+                            brands=BRANDS_FOR_ORG_PAGES, known_hashes=HASHES_FOR_ORG_PAGES)
+        assert sig is not None and sig.severity.name == "CRITICAL", host
