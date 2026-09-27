@@ -3,11 +3,11 @@
   "brands": [
     {"name": "PayPal", "domains": ["paypal.com", "paypal.me", "paypal.co.uk", "paypal.de", "paypal.fr", "paypal.it", "paypal.es", "paypal.ca", "paypal.com.au", "paypal.com.br", "paypalobjects.com"]},
     {"name": "Apple", "domains": ["apple.com", "icloud.com", "apple.co", "cdn-apple.com", "icloud.com.cn", "mzstatic.com"]},
-    {"name": "Microsoft", "domains": ["microsoft.com", "live.com", "outlook.com", "office.com", "teams.microsoft.com", "microsoftonline.com", "microsoft365.com", "office365.com", "sharepoint.com", "onedrive.com", "azure.com", "windows.net", "msn.com", "xbox.com", "bing.com"]},
+    {"name": "Microsoft", "domains": ["microsoft.com", "live.com", "outlook.com", "office.com", "teams.microsoft.com", "microsoftonline.com", "microsoft365.com", "office365.com", "sharepoint.com", "onedrive.com", "azure.com", "windows.net", "msn.com", "xbox.com", "bing.com"], "aliases": ["outlook", "onedrive", "office365", "microsoft365"]},
     {"name": "Google", "domains": ["google.com", "gmail.com", "meet.google.com", "youtube.com", "googleapis.com", "googleusercontent.com", "googlemail.com", "gstatic.com", "googlevideo.com", "goo.gl", "google.co.uk", "google.de", "google.fr", "google.ca", "google.com.au", "google.co.in", "google.co.jp", "google.es", "google.it", "google.com.br"]},
     {"name": "Amazon", "domains": ["amazon.com", "amazon.co.uk", "amazon.de", "amazon.ca", "amazon.in", "amazon.fr", "amazon.it", "amazon.es", "amazon.co.jp", "amazon.com.au", "amazon.com.br", "amazon.com.mx", "amazon.nl", "amazon.sg", "amazon.ae", "amazon.sa", "amazon.pl", "amazon.se", "amazon.com.tr", "amazonaws.com", "amazon.jobs", "amzn.to", "amzn.com", "a.co"]},
     {"name": "Netflix", "domains": ["netflix.com", "netflix.net", "nflxvideo.net", "nflximg.net"]},
-    {"name": "Meta", "domains": ["facebook.com", "instagram.com", "whatsapp.com", "meta.com", "facebook.net", "fb.com", "fb.me", "fbcdn.net", "whatsapp.net", "messenger.com", "oculus.com"]},
+    {"name": "Meta", "domains": ["facebook.com", "instagram.com", "whatsapp.com", "meta.com", "facebook.net", "fb.com", "fb.me", "fbcdn.net", "whatsapp.net", "messenger.com", "oculus.com"], "aliases": ["facebook", "instagram", "whatsapp"]},
     {"name": "Bank of America", "domains": ["bankofamerica.com"]},
     {"name": "Chase", "domains": ["chase.com", "jpmorganchase.com", "jpmorgan.com"]},
     {"name": "Wells Fargo", "domains": ["wellsfargo.com"]},
@@ -70,6 +70,13 @@
     {"name": "Singpass", "domains": ["singpass.gov.sg"]},
     {"name": "DBS", "domains": ["dbs.com", "dbs.com.sg"]},
     {"name": "OCBC", "domains": ["ocbc.com"]},
-    {"name": "UOB", "domains": ["uob.com.sg"]}
+    {"name": "UOB", "domains": ["uob.com.sg"]},
+    {"name": "Roblox", "domains": ["roblox.com", "rbxcdn.com"]},
+    {"name": "Flipkart", "domains": ["flipkart.com", "flixcart.com"]},
+    {"name": "Trezor", "domains": ["trezor.io"]},
+    {"name": "Allegro", "domains": ["allegro.pl", "allegro.cz", "allegro.sk", "allegrolokalnie.pl", "allegrogroup.com"]},
+    {"name": "Discord", "domains": ["discord.com", "discord.gg", "discordapp.com", "discordapp.net"]},
+    {"name": "Shopee", "domains": ["shopee.com", "shopee.sg", "shopee.co.id", "shopee.ph", "shopee.vn", "shopee.tw", "shopee.com.my", "shopee.co.th", "shopee.com.br"]},
+    {"name": "Telegram", "domains": ["telegram.org", "t.me", "telegram.me"]}
   ]
 }
