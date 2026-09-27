@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 
 from . import cache
 from .config import Config
-from .heuristics import lexical_url, punycode, redirect_chain, typosquat, url_structure
+from .heuristics import known_test_pages, lexical_url, punycode, redirect_chain, typosquat, url_structure
 from .models import InvestigationResult, Severity, Signal
 from .verdict import aggregator
 
@@ -81,6 +81,9 @@ def run(
     signals += lexical_url.analyze(host)
     brands = typosquat.load_brands(brands_path) if brands_path else typosquat.load_brands()
     signals += typosquat.run_all(host, brands)
+    known_test_page_signal = known_test_pages.check(host, url)
+    if known_test_page_signal:
+        signals.append(known_test_page_signal)
 
     typosquat_match = next((s for s in signals if s.code == "typosquat_match"), None)
 
