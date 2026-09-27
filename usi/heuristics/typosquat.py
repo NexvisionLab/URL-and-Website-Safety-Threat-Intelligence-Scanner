@@ -115,13 +115,15 @@ ORG_NAMESPACE_SUFFIXES = ("github.io", "gitlab.io")
 
 
 def is_official_org_page(host_l: str, brands: "list[dict]") -> bool:
-    """True for <brand>.github.io / <brand>.gitlab.io where the single label is exactly a listed brand's name. Only the brand's
-    own name counts (not its aliases, and not 'microsoft-login'), and a nested host (a.b.github.io) never does. The content
-    checks (a login form imitating a brand) still run on such a page."""
+    """True for <brand>.github.io / <brand>.gitlab.io where the single label is exactly a listed brand's name or one of its
+    aliases (microsoft.github.io, onedrive.github.io, facebook.github.io). Not 'microsoft-login', and a nested host
+    (a.b.github.io) never counts. The content checks (a login form imitating a brand) still run on such a page."""
     for suffix in ORG_NAMESPACE_SUFFIXES:
         if host_l.endswith("." + suffix):
             label = host_l[: -(len(suffix) + 1)]
-            return "." not in label and any(label == _norm(brand["name"]) for brand in brands)
+            return "." not in label and any(
+                label == _norm(name) for brand in brands for name in [brand["name"]] + list(brand.get("aliases", []))
+            )
     return False
 
 
@@ -281,12 +283,20 @@ def find_combosquat_keyword_match(host: str, brands: "list[dict]") -> "Signal | 
 
     free_suffix = _free_host_suffix(host_l)
     lured = False
+    exact_name = False
     if free_suffix:
         sub = host_l[: -(len(free_suffix) + 1)]
         digits = sum(c.isdigit() for c in sub) >= 2
         lure_word = any(w in sub for w in _LURE_SUBSTRINGS) or any(w in set(re.split(r"[.\-]", sub)) for w in _LURE_TOKENS)
         # a brand's own official page on such a platform ('microsoft.github.io') is the bare name: not enough on its own
         lured = (whole_label or len(name_l) >= 6) and sub != name_l and (digits or lure_word)
+        # A page named exactly like a brand on a host where anyone can claim any name (paypal.weebly.com): the brand does
+        # not host its site there. On GitHub/GitLab Pages the same name is the brand's own account, handled above. Names
+        # under six letters (apple, steam, zoom) are ordinary words, so a hobby site of that name is not raised.
+        exact_name = free_suffix not in ORG_NAMESPACE_SUFFIXES and any(
+            len(v) >= 6 and v == _norm(sub.replace("-", "")) for v, _ in _name_variants(matched_brand)
+        )
+        lured = lured or exact_name
 
     label = shown if _norm(shown) != _norm(brand_name) else brand_name
     return Signal(
@@ -297,7 +307,11 @@ def find_combosquat_keyword_match(host: str, brands: "list[dict]") -> "Signal | 
             f"'{host}' contains the brand name '{label}'"
             + (f" alongside {', '.join(repr(k) for k in keywords)}" if keywords else "")
             + " but is not one of its known domains - a common combosquat pattern. "
-            + (f"It is a page on a free hosting service ({free_suffix}), where anyone can pick a name. " if lured else "")
+            + (
+                f"It is a page named exactly like the brand on a free hosting service ({free_suffix}), where anyone can pick "
+                "a name and the brand does not host its site. " if exact_name
+                else f"It is a page on a free hosting service ({free_suffix}), where anyone can pick a name. " if lured else ""
+            )
             + f"The real {brand_name} website is {real_domain}."
         ),
         evidence={"host": host, "brand": brand_name, "keywords": keywords, "real_domains": real_domains,

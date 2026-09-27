@@ -138,7 +138,7 @@ def test_a_brands_own_github_pages_site_is_not_flagged():
 def test_the_exemption_is_only_for_the_exact_name_on_platforms_where_names_are_owned():
     assert typosquat.is_official_org_page("microsoft.github.io", BRANDS)
     for host in ("microsoft-login.github.io", "microsoft.weebly.com", "paypal.wixsite.com", "a.microsoft.github.io",
-                 "microsoftx.github.io", "outlook.github.io", "microsoft.com", "example.github.io"):
+                 "microsoftx.github.io", "microsoft.com", "example.github.io"):
         assert not typosquat.is_official_org_page(host, BRANDS), host
 
 
@@ -146,3 +146,34 @@ def test_lookalikes_on_github_pages_and_claimable_names_elsewhere_are_still_flag
     assert high("secure-paypal-verify.github.io")
     assert high("microsoft-login.github.io")
     assert signal("paypal.weebly.com") is not None  # anyone can claim this name on Weebly
+
+
+# --- brand aliases on GitHub Pages are the brand's own too (onedrive.github.io read Likely Malicious)
+def test_a_brands_alias_on_github_pages_is_the_brands_own():
+    for host in ("onedrive.github.io", "facebook.github.io", "instagram.github.io", "outlook.github.io"):
+        assert typosquat.is_official_org_page(host, BRANDS), host
+        assert signal(host) is None, host
+
+
+# --- an exact brand-name page on a host where anyone can claim any name (paypal.weebly.com read Likely Safe)
+def test_an_exact_brand_name_on_a_claimable_free_host_is_high():
+    for host in ("paypal.weebly.com", "netflix.wixsite.com", "microsoft.blogspot.com", "bank-of-america.weebly.com", "spotify.vercel.app"):
+        s = signal(host)
+        assert s is not None and s.severity == Severity.HIGH, host
+        assert "named exactly like the brand" in s.message, host
+        assert s.evidence["free_hosting"], host
+
+
+def test_short_ordinary_word_brands_are_not_raised_on_a_free_host():
+    for host in ("apple.weebly.com", "steam.wixsite.com", "zoom.blogspot.com", "meta.weebly.com", "visa.weebly.com"):
+        assert not high(host), host
+
+
+def test_a_similar_but_not_exact_name_on_a_free_host_is_unchanged():
+    assert signal("paypalfans.weebly.com").severity == Severity.MEDIUM
+    assert not high("steam-punk-shop.wixsite.com")
+
+
+def test_the_exact_name_rule_does_not_reach_github_or_gitlab_pages():
+    assert signal("paypal.github.io") is None and signal("paypal.gitlab.io") is None
+
