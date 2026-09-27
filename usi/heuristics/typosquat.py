@@ -145,6 +145,61 @@ def find_typosquat_match(host: str, brands: "list[dict]") -> "Signal | None":
     return None
 
 
+# Free hosting and site-builder platforms: anyone can register a subdomain there, so a well-known brand's name inside
+# one says nothing about who runs the page. Seen in 2026-09 phishing feeds: netflix-71f05.firebaseapp.com,
+# connexioncompteoutlook.weebly.com, not-start-eng-trezr.pages.dev, verifiedbadge-celestine.vercel.app.
+FREE_HOSTING_SUFFIXES = (
+    "weebly.com", "weeblysite.com", "wixsite.com", "blogspot.com", "github.io", "gitbook.io", "netlify.app", "vercel.app",
+    "pages.dev", "workers.dev", "firebaseapp.com", "web.app", "framer.website", "framer.app", "framer.ai", "framer.media",
+    "replit.app", "replit.dev", "herokuapp.com", "glitch.me", "webadorsite.com", "square.site", "craftum.io", "freepage.cc",
+    "previewship.net", "railway.app", "azurewebsites.net", "cloudapp.azure.com", "onrender.com", "fly.dev", "surge.sh",
+    "000webhostapp.com", "godaddysites.com", "strikingly.com", "carrd.co", "notion.site", "webflow.io", "bubbleapps.io",
+    "wordpress.com", "tumblr.com", "jimdofree.com", "site123.me", "mystrikingly.com",
+)
+# Words that make a brand name on a free host look like a lure. Long ones count anywhere in the name; short ones (which sit
+# inside ordinary words: "hidden", "payroll") only when they stand alone between hyphens or dots.
+_LURE_SUBSTRINGS = (
+    "connexion", "compte", "login", "signin", "verify", "verif", "secure", "support", "account", "update", "confirm", "wallet",
+    "official", "claim", "reward", "recover", "unlock", "billing", "service", "cuenta", "iniciar", "anmelden", "konto",
+    "authenticat", "suspend", "security",
+)
+_LURE_TOKENS = ("id", "web", "pay", "free", "gift", "help", "kyc", "offer", "prize", "app", "sso", "auth", "cs")
+
+
+def _free_host_suffix(host_l: str) -> "str | None":
+    for suffix in FREE_HOSTING_SUFFIXES:
+        if host_l.endswith("." + suffix):
+            return suffix
+    return None
+
+
+def _norm(name: str) -> str:
+    """A brand name as it would appear in a hostname: no spaces, slashes or dots ('Booking.com' -> 'bookingcom')."""
+    return name.lower().replace(" ", "").replace("/", "").replace(".", "")
+
+
+def _name_variants(brand: dict) -> "list[tuple[str, str]]":
+    """(normalised name, the text to show) for the brand's name, its aliases, and - for a dotted name like 'Booking.com' -
+    the part before the dot ('booking'), which phishing hosts use on its own ('secure-checkout-booking.com')."""
+    out = []
+    for raw in [brand["name"]] + list(brand.get("aliases", [])):
+        out.append((_norm(raw), raw))
+        if "." in raw:
+            stem = _norm(raw.split(".", 1)[0])
+            if len(stem) >= 5:
+                out.append((stem, raw.split(".", 1)[0]))
+    return out
+
+
+def _real_domain_for(brand: dict, shown: str) -> str:
+    """The real domain to point a visitor at: the one starting with the matched name if there is one (alias 'instagram' -> instagram.com)."""
+    key = _norm(shown)
+    for d in brand["domains"]:
+        if d.lower().startswith(key):
+            return d
+    return brand["domains"][0]
+
+
 def find_combosquat_keyword_match(host: str, brands: "list[dict]") -> "Signal | None":
     """Catches combosquats the fixed permutation list wouldn't generate,
     e.g. 'paypal-account-support-team.net' - substring match of the
@@ -158,7 +213,11 @@ def find_combosquat_keyword_match(host: str, brands: "list[dict]") -> "Signal | 
     (e.g. "Meta" inside "MetaMask") would shadow the correct
     attribution just by sitting earlier in the file:
     'metamask-connect.vercel.app' must be attributed to MetaMask, not to
-    Meta, Facebook's parent."""
+    Meta, Facebook's parent.
+
+    A brand entry may carry "aliases" (other names the brand is known by: Microsoft -> outlook), and a name that
+    contains a dot ('Booking.com') is also matched by its part before the dot. On a free-hosting subdomain
+    (FREE_HOSTING_SUFFIXES) a brand name that stands as its own word, together with digits or a lure word, is HIGH."""
     host_l = host.lower()
     if _is_known_brand_host(host_l, brands):
         return None
@@ -176,43 +235,59 @@ def find_combosquat_keyword_match(host: str, brands: "list[dict]") -> "Signal | 
     )
     matches = []
     for brand in brands:
-        name_l = brand["name"].lower().replace(" ", "").replace("/", "")
-        if len(name_l) < 4:
-            # Too short to substring-match safely (DHL/UPS/IRS are among the
-            # most-impersonated brands, but "ups" is inside plenty of
-            # words): require it as a whole label AND a phishing keyword.
-            if name_l in tokens and keywords:
-                matches.append((name_l, brand))
-            continue
         real_domains = [d.lower() for d in brand["domains"]]
         if host_l in real_domains:
             continue
         if any(host_l.endswith("." + d) for d in real_domains):
             continue  # legitimate subdomain
-        if any(name_l in h for h in haystacks):
-            matches.append((name_l, brand))
+        for name_l, shown in _name_variants(brand):
+            if len(name_l) < 4:
+                # Too short to substring-match safely (DHL/UPS/IRS are among the
+                # most-impersonated brands, but "ups" is inside plenty of
+                # words): require it as a whole label AND a phishing keyword.
+                if name_l in tokens and keywords:
+                    matches.append((name_l, shown, brand))
+                continue
+            if any(name_l in h for h in haystacks):
+                matches.append((name_l, shown, brand))
 
     if not matches:
         return None
 
     matches.sort(key=lambda m: -len(m[0]))
-    _, matched_brand = matches[0]
+    name_l, shown, matched_brand = matches[0]
     brand_name = matched_brand["name"]
-    real_domains = matched_brand["domains"][:3]
+    real_domain = _real_domain_for(matched_brand, shown)
+    real_domains = [real_domain] + [d for d in matched_brand["domains"] if d != real_domain][:2]
+    # any of the brand's names standing as its own word counts ('booking' for 'Booking.com'), not only the longest variant
+    whole_label = any(v in tokens for v, _ in _name_variants(matched_brand))
+
+    free_suffix = _free_host_suffix(host_l)
+    lured = False
+    if free_suffix:
+        sub = host_l[: -(len(free_suffix) + 1)]
+        digits = sum(c.isdigit() for c in sub) >= 2
+        lure_word = any(w in sub for w in _LURE_SUBSTRINGS) or any(w in set(re.split(r"[.\-]", sub)) for w in _LURE_TOKENS)
+        # a brand's own official page on such a platform ('microsoft.github.io') is the bare name: not enough on its own
+        lured = (whole_label or len(name_l) >= 6) and sub != name_l and (digits or lure_word)
+
+    label = shown if _norm(shown) != _norm(brand_name) else brand_name
     return Signal(
         source="typosquat",
         code="combosquat_keyword_match",
-        severity=Severity.HIGH if keywords else Severity.MEDIUM,
+        severity=Severity.HIGH if (keywords or lured) else Severity.MEDIUM,
         message=(
-            f"'{host}' contains the brand name '{brand_name}'"
+            f"'{host}' contains the brand name '{label}'"
             + (f" alongside {', '.join(repr(k) for k in keywords)}" if keywords else "")
             + " but is not one of its known domains - a common combosquat pattern. "
-            + f"The real {brand_name} website is {real_domains[0]}."
+            + (f"It is a page on a free hosting service ({free_suffix}), where anyone can pick a name. " if lured else "")
+            + f"The real {brand_name} website is {real_domain}."
         ),
         evidence={"host": host, "brand": brand_name, "keywords": keywords, "real_domains": real_domains,
                   # the brand's name stands as its own word in the host ("xzy-singpost.com"), not just
                   # a substring of a longer word ("metallica-fans.com" contains "meta")
-                  "brand_is_whole_label": matched_brand["name"].lower().replace(" ", "").replace("/", "") in tokens},
+                  "brand_is_whole_label": whole_label,
+                  **({"free_hosting": free_suffix} if lured else {})},
     )
 
 
