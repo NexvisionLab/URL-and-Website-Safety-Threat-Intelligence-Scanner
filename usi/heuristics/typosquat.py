@@ -108,12 +108,29 @@ def generate_candidates(domain: str, max_candidates: int = MAX_CANDIDATES_PER_BR
     return candidates
 
 
+# Platforms where a page's name is an account name that only its owner can hold (github.com/microsoft owns microsoft.github.io), so
+# a page named exactly like a brand there is the brand's own. Not true of Weebly, Wix, Blogspot and the like, where anyone can claim
+# paypal.weebly.com first, so those stay covered by the lookalike checks.
+ORG_NAMESPACE_SUFFIXES = ("github.io", "gitlab.io")
+
+
+def is_official_org_page(host_l: str, brands: "list[dict]") -> bool:
+    """True for <brand>.github.io / <brand>.gitlab.io where the single label is exactly a listed brand's name. Only the brand's
+    own name counts (not its aliases, and not 'microsoft-login'), and a nested host (a.b.github.io) never does. The content
+    checks (a login form imitating a brand) still run on such a page."""
+    for suffix in ORG_NAMESPACE_SUFFIXES:
+        if host_l.endswith("." + suffix):
+            label = host_l[: -(len(suffix) + 1)]
+            return "." not in label and any(label == _norm(brand["name"]) for brand in brands)
+    return False
+
+
 def _is_known_brand_host(host_l: str, brands: "list[dict]") -> bool:
-    """True if the host is (a subdomain of) ANY listed brand's real domain.
-    Checked across all brands up front - skipping only the current brand's
+    """True if the host is (a subdomain of) ANY listed brand's real domain, or the brand's own account page on GitHub or GitLab
+    Pages. Checked across all brands up front - skipping only the current brand's
     own domains let a shorter brand ("Meta") match another brand's real
     site (metamask.io) as a lookalike."""
-    return any(
+    return is_official_org_page(host_l, brands) or any(
         host_l == d or host_l.endswith("." + d)
         for brand in brands for d in (x.lower() for x in brand["domains"])
     )

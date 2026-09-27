@@ -16,6 +16,7 @@ from urllib.parse import urljoin
 import requests
 
 from .. import netguard
+from ..heuristics import typosquat
 from ..models import Severity, Signal
 from ..net import build_session
 
@@ -81,6 +82,8 @@ def check(
 
     brand_domains_by_name = {b["name"]: [d.lower() for d in b["domains"]] for b in brands}
     host_l = host.lower()
+    if typosquat.is_official_org_page(host_l, brands):
+        return None  # microsoft.github.io shows Microsoft's favicon because it IS Microsoft's page
 
     for brand_name, entry in known_hashes.items():
         if entry.get("md5") != site_hash:

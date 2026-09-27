@@ -127,3 +127,22 @@ PHISHING_HOSTS = [
 def test_the_phishing_hosts_that_carry_a_brand_name_now_have_a_signal():
     missing = [h for h in PHISHING_HOSTS if signal(h) is None]
     assert missing == [], missing
+
+
+# --- a brand's own page on GitHub/GitLab Pages (microsoft.github.io read "Likely Malicious" in the live checker)
+def test_a_brands_own_github_pages_site_is_not_flagged():
+    for host in ("microsoft.github.io", "google.github.io", "netflix.github.io", "paypal.github.io", "microsoft.gitlab.io"):
+        assert signal(host) is None, host
+
+
+def test_the_exemption_is_only_for_the_exact_name_on_platforms_where_names_are_owned():
+    assert typosquat.is_official_org_page("microsoft.github.io", BRANDS)
+    for host in ("microsoft-login.github.io", "microsoft.weebly.com", "paypal.wixsite.com", "a.microsoft.github.io",
+                 "microsoftx.github.io", "outlook.github.io", "microsoft.com", "example.github.io"):
+        assert not typosquat.is_official_org_page(host, BRANDS), host
+
+
+def test_lookalikes_on_github_pages_and_claimable_names_elsewhere_are_still_flagged():
+    assert high("secure-paypal-verify.github.io")
+    assert high("microsoft-login.github.io")
+    assert signal("paypal.weebly.com") is not None  # anyone can claim this name on Weebly
