@@ -39,6 +39,17 @@
   don't allow republishing them), and `scripts/update_acra.py` to build a local copy of ACRA's register.
 - `pipeline.run(page_sink=...)`: hands the fetched page to a caller that analyses it further.
 
+### Fixed
+- Public sites the VPN's DNS maps to a private address are no longer refused by the private-address guard
+  (`usi/netguard.py`). Found live on darknyx.com, 2026-10-04: bbc.com, bbc.co.uk, itv.com, channel4.com and
+  disneyplus.com resolved to 10.240.x.x on the server (a region-unblocking resolver) and the URL checker
+  answered "this address cannot be checked". For a real DNS name whose system answer is not public, the guard
+  now asks 1.1.1.1 and 9.9.9.9 directly (stdlib UDP, `netguard.PUBLIC_RESOLVERS`); if every address they
+  return is public it connects to that address, keeping the host name for the Host header, TLS server name
+  and certificate check, so the private answer is never connected to. No answer, or any non-public answer,
+  stays refused; IP literals, `localhost` and numeric shorthand never take this path. The TLS certificate
+  lookup uses `netguard.create_connection` for the same reason. 45 new tests (`tests/test_netguard_public_dns.py`).
+
 ### Changed
 - The cloaking check no longer reports a size difference between two short responses (both under 2 KB,
   typically block or error pages when a site refuses the server) as cloaking; it reports

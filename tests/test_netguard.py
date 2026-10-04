@@ -18,6 +18,13 @@ PRIVATE_TARGETS = [
 ]
 
 
+@pytest.fixture(autouse=True)
+def no_public_resolvers(monkeypatch):
+    # These tests mock the system resolver; without this the fallback would query real public DNS.
+    # The fallback itself is covered in test_netguard_public_dns.py.
+    monkeypatch.setattr(netguard, "PUBLIC_RESOLVERS", ())
+
+
 @pytest.fixture
 def guard_on(monkeypatch):
     monkeypatch.setenv(netguard.ENV_VAR, "1")
