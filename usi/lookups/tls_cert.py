@@ -16,11 +16,12 @@ CONNECT_TIMEOUT = 10
 
 
 def _get_cert_der(host: str, port: int = 443) -> bytes:
-    netguard.check_host(host)
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE  # we inspect the cert ourselves, incl. mismatches
-    with socket.create_connection((host, port), timeout=CONNECT_TIMEOUT) as sock:
+    # vets the host and, when the system resolver's answer was not public, connects to the address
+    # the public resolvers gave (the server name below is still the host name)
+    with netguard.create_connection(host, port, CONNECT_TIMEOUT) as sock:
         with ctx.wrap_socket(sock, server_hostname=host) as tls_sock:
             return tls_sock.getpeercert(binary_form=True)
 
