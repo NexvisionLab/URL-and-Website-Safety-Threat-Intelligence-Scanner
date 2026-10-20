@@ -12,7 +12,12 @@ import json
 import re
 from pathlib import Path
 
+import tldextract
+
 from ..models import Severity, Signal
+
+# Offline public-suffix extractor (no network; uses the bundled snapshot) - same pattern as usi/lookups/rdap.py.
+_EXTRACT = tldextract.TLDExtract(suffix_list_urls=())
 
 MAX_CANDIDATES_PER_BRAND = 150
 
@@ -328,10 +333,84 @@ def _lookalike_variants(host_stripped: str) -> "set[str]":
     return {host_stripped, base.replace("1", "l"), base.replace("1", "i"), base.replace("rn", "m")}
 
 
+def _lev_le1(a: str, b: str) -> bool:
+    """True if a and b are equal or within one edit (insert, delete, or substitute a single character)."""
+    if a == b:
+        return True
+    la, lb = len(a), len(b)
+    if abs(la - lb) > 1:
+        return False
+    i = 0
+    while i < min(la, lb) and a[i] == b[i]:
+        i += 1
+    if la == lb:          # substitution: the rest after the differing char must match
+        return a[i + 1:] == b[i + 1:]
+    if la > lb:           # a has one extra char
+        return a[i + 1:] == b[i:]
+    return a[i:] == b[i + 1:]  # b has one extra char
+
+
+def _meaningful_labels(host_l: str) -> "list[str]":
+    """The host's labels minus its public suffix: subdomain labels plus the registrable label.
+    'teams.live.com' -> ['teams', 'live']; 'team.lives.cn.com' -> ['team', 'lives']."""
+    ext = _EXTRACT(host_l)
+    labels = [p for p in ext.subdomain.split(".") if p] if ext.subdomain else []
+    if ext.domain:
+        labels.append(ext.domain)
+    return labels or host_l.split(".")[:-1]
+
+
+def find_brand_domain_lookalike(host: str, brands: "list[dict]") -> "Signal | None":
+    """A host that imitates a brand's multi-label service DOMAIN by near-matching its labels, even
+    across a different public suffix: 'team.lives.cn.com' -> 'teams.live.com'. The name/alias
+    combosquat check keys on the brand NAME (the labels 'teams'/'live' are neither Microsoft's name
+    nor an alias), and the single-edit candidate generator never reaches a two-edit, suffix-swapped
+    variant - so both miss this shape. Only brand domains with a service-style subdomain
+    (teams.microsoft.com, meet.google.com) are considered, never a plain or ccTLD domain
+    (amazon.com.au), and at least two labels of >=3 characters must each near-match (edit distance
+    <=1), so an ordinary word like 'live' or 'team' on its own cannot trip it."""
+    host_l = host.lower().strip(".")
+    if _is_known_brand_host(host_l, brands):
+        return None
+    host_labels = _meaningful_labels(host_l)
+    if len(host_labels) < 2:
+        return None
+    for brand in brands:
+        for domain in brand["domains"]:
+            ext = _EXTRACT(domain.lower())
+            if not ext.subdomain or not ext.domain:
+                continue  # need a service subdomain, not a plain or ccTLD domain
+            sig = [p for p in ext.subdomain.split(".") if p] + [ext.domain]
+            if len(sig) < 2 or any(len(s) < 3 for s in sig):
+                continue
+            n = len(sig)
+            for start in range(0, len(host_labels) - n + 1):
+                window = host_labels[start:start + n]
+                if all(_lev_le1(window[k], sig[k]) for k in range(n)):
+                    if window == sig and start == 0 and len(host_labels) == n:
+                        continue  # identical signature, nothing else (a real brand host is already excluded above)
+                    return Signal(
+                        source="typosquat",
+                        code="brand_domain_lookalike",
+                        severity=Severity.HIGH,
+                        message=(
+                            f"'{host}' closely matches the domain labels of '{domain}' ({brand['name']}) "
+                            "but is a different registrable domain - a common lookalike of a brand's service "
+                            f"subdomain. The real {brand['name']} domain is {domain}."
+                        ),
+                        evidence={"host": host, "brand": brand["name"], "resembles_domain": domain,
+                                  "matched_labels": window, "real_domains": brand["domains"][:3]},
+                    )
+    return None
+
+
 def run_all(host: str, brands: "list[dict] | None" = None) -> "list[Signal]":
     brands = brands if brands is not None else load_brands()
     match = find_typosquat_match(host, brands)
     if match:
         return [match]
+    lookalike = find_brand_domain_lookalike(host, brands)
+    if lookalike:
+        return [lookalike]
     combosquat = find_combosquat_keyword_match(host, brands)
     return [combosquat] if combosquat else []
