@@ -81,6 +81,13 @@ def run(
     signals += lexical_url.analyze(host)
     brands = typosquat.load_brands(brands_path) if brands_path else typosquat.load_brands()
     signals += typosquat.run_all(host, brands)
+    # The URL checker sees the full URL with its path, unlike the bare-host /lookalike endpoint the
+    # scam-message/job/email checkers use - only check the path when nothing on the host itself already
+    # flagged this host, to avoid a redundant second notice for the same page.
+    if not any(s.source == "typosquat" for s in signals):
+        path_lookalike = typosquat.find_brand_in_path_lookalike(url, host, brands)
+        if path_lookalike:
+            signals.append(path_lookalike)
     known_test_page_signal = known_test_pages.check(host, url)
     if known_test_page_signal:
         signals.append(known_test_page_signal)

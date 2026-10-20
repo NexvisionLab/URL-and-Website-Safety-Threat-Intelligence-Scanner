@@ -11,6 +11,7 @@ match happens separately in lookups/crtsh.py."""
 import json
 import re
 from pathlib import Path
+from urllib.parse import urlparse
 
 import tldextract
 
@@ -465,3 +466,53 @@ def run_all(host: str, brands: "list[dict] | None" = None) -> "list[Signal]":
         return [cctld_combo]
     combosquat = find_combosquat_keyword_match(host, brands)
     return [combosquat] if combosquat else []
+
+
+def find_brand_in_path_lookalike(url: str, host: str, brands: "list[dict]") -> "Signal | None":
+    """A brand name that appears only in the URL PATH, not the host at all - a documented real case
+    (verifiedbadge-celestine.vercel.app/meta-verified-for-business impersonating Meta). Every other check
+    here looks only at the HOST; a host with no brand reference whatsoever sails through them even when
+    the page it points at clearly targets that brand by name in its own address.
+
+    Only applies on a free-hosting suffix (FREE_HOSTING_SUFFIXES) the operator of this page does not
+    control exclusively - github.io/gitlab.io are excluded the same way is_official_org_page already
+    excludes them from the host-based check. The brand name must stand as its own path segment/token
+    (split on the usual URL separators), never a substring of an unrelated word, AND a lure word
+    (verify, login, support, official, security...) must appear in the same path - a brand name alone in
+    a URL path is extremely common and harmless (a review, a blog post, an affiliate link), so the lure
+    word is what actually distinguishes an impersonation attempt from ordinary mention."""
+    host_l = host.lower().strip(".")
+    if _is_known_brand_host(host_l, brands) or is_official_org_page(host_l, brands):
+        return None
+    free_suffix = _free_host_suffix(host_l)
+    if not free_suffix:
+        return None
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return None
+    path_l = f"{parsed.path or ''}?{parsed.query or ''}".lower()
+    tokens = {t for t in re.split(r"[/\-_.?&=]+", path_l) if t}
+    if not tokens:
+        return None
+    lure = any(w in path_l for w in _LURE_SUBSTRINGS) or any(w in tokens for w in _LURE_TOKENS)
+    if not lure:
+        return None
+    for brand in brands:
+        for name_l, shown in _name_variants(brand):
+            if len(name_l) < 4 or name_l not in tokens:
+                continue
+            real_domain = _real_domain_for(brand, shown)
+            return Signal(
+                source="typosquat",
+                code="brand_in_path_lookalike",
+                severity=Severity.HIGH,
+                message=(
+                    f"The address path names '{shown}' alongside wording like verification or support, on "
+                    f"'{host}' ({free_suffix}), a free hosting service where anyone can publish any page - "
+                    f"not {brand['name']}'s own site. The real {brand['name']} website is {real_domain}."
+                ),
+                evidence={"host": host, "brand": brand["name"], "real_domain": real_domain,
+                          "real_domains": brand["domains"][:3], "free_hosting": free_suffix},
+            )
+    return None
