@@ -465,7 +465,10 @@ def run_all(host: str, brands: "list[dict] | None" = None) -> "list[Signal]":
     if cctld_combo:
         return [cctld_combo]
     combosquat = find_combosquat_keyword_match(host, brands)
-    return [combosquat] if combosquat else []
+    if combosquat:
+        return [combosquat]
+    fuzzy = find_fuzzy_brand_token_match(host, brands)
+    return [fuzzy] if fuzzy else []
 
 
 def find_brand_in_path_lookalike(url: str, host: str, brands: "list[dict]") -> "Signal | None":
@@ -514,5 +517,67 @@ def find_brand_in_path_lookalike(url: str, host: str, brands: "list[dict]") -> "
                 ),
                 evidence={"host": host, "brand": brand["name"], "real_domain": real_domain,
                           "real_domains": brand["domains"][:3], "free_hosting": free_suffix},
+            )
+    return None
+
+
+def _name_candidates(name_l: str) -> "set[str]":
+    """The same narrow, well-tested perturbation set generate_candidates() uses for a brand's own domain -
+    character omission, adjacent transposition, repetition, digit-homoglyph substitution - applied to the
+    bare brand name alone (a throwaway TLD gets the splitting machinery to run, then is stripped back off).
+    Deliberately NOT a blanket single-edit-distance check: an arbitrary letter substitution is not one of
+    these perturbations, which is what keeps this from matching an unrelated ordinary word that merely
+    happens to differ from a brand name by one letter (see find_fuzzy_brand_token_match)."""
+    raw = generate_candidates(f"{name_l}.x")
+    return {c[:-2] for c in raw if c.endswith(".x") and "-" not in c}
+
+
+def find_fuzzy_brand_token_match(host: str, brands: "list[dict]") -> "Signal | None":
+    """A brand name misspelled by one typo-shaped edit, standing as its own token in a longer free-hosting
+    host: not-start-eng-trezr.pages.dev for Trezor ('trezr' = 'trezor' with the 'o' omitted - a documented
+    real miss from the 2026-09-27 OpenPhish sample). The existing typosquat check only compares the WHOLE
+    investigated host against a brand's own full-domain candidates, and the combosquat check only matches
+    an EXACT brand-name substring - neither catches a misspelled brand name embedded inside an unrelated,
+    longer host.
+
+    Reuses generate_candidates' own narrow name-level perturbations (_name_candidates) rather than any
+    single-character substitution: that is what keeps this from flagging an ordinary word that coincidentally
+    differs from a long brand name by one letter ('cooking' is not reachable from 'Booking' by omission,
+    transposition, repetition or homoglyph substitution, so it is never a candidate; likewise 'googles' from
+    'Google'). Brand name must be >=6 characters (confirmed by sweeping ~150 ordinary English words against
+    every brand name in brands.json, down to a single genuine coincidence before this reuse closed it), and
+    this only applies on a free-hosting suffix - the same 'anyone can claim any name here' precedent already
+    used throughout this file - never an arbitrary domain, where a one-letter coincidence is far more likely
+    to be an unrelated site than an impersonation attempt."""
+    host_l = host.lower().strip(".")
+    if _is_known_brand_host(host_l, brands):
+        return None
+    free_suffix = _free_host_suffix(host_l)
+    if not free_suffix:
+        return None
+    tokens = {t for t in re.split(r"[.\-_]", host_l) if t}
+    if not tokens:
+        return None
+    for brand in brands:
+        for name_l, shown in _name_variants(brand):
+            if len(name_l) < 6:
+                continue
+            hit = tokens & _name_candidates(name_l)
+            if not hit:
+                continue
+            misspelled = next(iter(hit))
+            real_domain = _real_domain_for(brand, shown)
+            return Signal(
+                source="typosquat",
+                code="fuzzy_brand_token_match",
+                severity=Severity.HIGH,
+                message=(
+                    f"'{host}' contains '{misspelled}', a one-character misspelling of the brand name "
+                    f"'{shown}', on '{free_suffix}', a free hosting service where anyone can publish any page. "
+                    f"The real {brand['name']} website is {real_domain}."
+                ),
+                evidence={"host": host, "brand": brand["name"], "misspelled_as": misspelled,
+                          "real_domain": real_domain, "real_domains": brand["domains"][:3],
+                          "free_hosting": free_suffix},
             )
     return None
