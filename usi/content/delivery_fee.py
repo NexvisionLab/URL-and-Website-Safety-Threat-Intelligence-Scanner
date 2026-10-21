@@ -100,6 +100,28 @@ _TOLL_AUTHORITY_HINT = (
     "e-zpass", "ezpass", "sunpass", "txtag", "tx-tag", "fastrak", "toll roads",
 )
 
+# Pages that TEACH people to spot these scams quote the scam wording as an example - a consumer-protection
+# guide, a bank or toll-operator scam alert, a security blog. darknyx.com's own Safety Guide has a card titled
+# "Unpaid toll or fine" and was read as "Suspicious" by its own checker (2026-10-21). A mention is not a demand,
+# but the warning that proves it is rarely in the same sentence as the phrase (it sits in the heading, then the
+# example, then the advice), so the test is about the page as a whole: it must use several different pieces of
+# scam-awareness language AND use them a lot. Measured on the real guide: 4 distinct cues, 19 mentions. A scam
+# lure that copies a carrier's warning footer scored 3 mentions, so both conditions are needed. Wording that
+# lures copy from real notices ("we will never ask for your password") is deliberately not a cue. A page could
+# still stuff these words in to dodge this one check; that only turns this one finding to INFO, and the brand,
+# domain and page checks are unaffected.
+_AWARENESS_CUES = (
+    r"\bscam(?:s|mers?)?\b", r"\bphishing\b", r"\bsmishing\b", r"\bred\s+flags?\b",
+    r"\bhow\s+to\s+spot\b", r"\b(?:do\s*not|don'?t)\s+click\b", r"\bfraudsters?\b",
+)
+_AWARENESS_MIN_DISTINCT = 3
+_AWARENESS_MIN_MENTIONS = 8
+
+
+def _is_awareness_page(text_l: str) -> bool:
+    counts = [len(re.findall(p, text_l)) for p in _AWARENESS_CUES]
+    return sum(1 for c in counts if c) >= _AWARENESS_MIN_DISTINCT and sum(counts) >= _AWARENESS_MIN_MENTIONS
+
 
 def check_toll(page_text: "str | None") -> "Signal | None":
     text_l = (page_text or "").lower()
@@ -109,6 +131,14 @@ def check_toll(page_text: "str | None") -> "Signal | None":
     toll_hits = [p for p in _TOLL_LANGUAGE_PATTERNS if re.search(p, text_l)]
     if not toll_hits:
         return None
+
+    if _is_awareness_page(text_l):
+        return Signal(
+            source="delivery_fee", code="toll_scam_wording_in_awareness_page", severity=Severity.INFO,
+            message="This page mentions toll-scam wording, but it is explaining how to spot such scams, "
+                    "not asking for a payment.",
+            evidence={"toll_patterns": toll_hits},
+        )
 
     mentions_authority = any(a in text_l for a in _TOLL_AUTHORITY_HINT)
 
@@ -135,6 +165,14 @@ def check(page_text: "str | None") -> "Signal | None":
 
     if not (held_hits or fee_hits):
         return None
+
+    if _is_awareness_page(text_l):
+        return Signal(
+            source="delivery_fee", code="delivery_fee_wording_in_awareness_page", severity=Severity.INFO,
+            message="This page mentions parcel-fee scam wording, but it is explaining how to spot such scams, "
+                    "not asking for a payment.",
+            evidence={"held_patterns": held_hits, "fee_patterns": fee_hits},
+        )
 
     mentions_carrier = any(c in text_l for c in _CARRIER_HINT)
 

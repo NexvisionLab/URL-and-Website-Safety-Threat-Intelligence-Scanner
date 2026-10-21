@@ -8,6 +8,26 @@ def test_natural_brand_domains_not_flagged():
         assert signals == [], f"{host} should not be flagged, got {signals}"
 
 
+def test_short_consonant_heavy_real_names_not_flagged():
+    # A low vowel ratio and a long consonant run are the same observation, so together they are ONE kind of
+    # evidence. darknyx.com (the platform's own domain) was flagged by counting them as two (2026-10-21).
+    for host in ("darknyx.com", "rhythms.com", "crypts.org", "nymphs.net", "strengths.com", "tryst.com"):
+        assert lexical_url.analyze(host) == [], f"{host} should not be flagged"
+
+
+def test_a_long_unpronounceable_label_still_flags_on_consonants_alone():
+    signals = lexical_url.analyze("xqzpfkjvbnm.com")  # 11 letters, no vowels at all
+    assert len(signals) == 1
+    assert signals[0].code == "dga_like_domain"
+
+
+def test_consonant_clustering_plus_an_independent_signal_still_flags_a_short_label():
+    # scattered digits are independent of consonant clustering: two kinds of evidence
+    signals = lexical_url.analyze("xqz7k2p.com")
+    assert len(signals) == 1
+    assert "scattered_digits" in signals[0].evidence["triggered"]
+
+
 def test_random_looking_domain_flagged():
     # Constructed to trigger multiple sub-signals at once: high entropy,
     # low vowel ratio, a long consonant run, and scattered digits.

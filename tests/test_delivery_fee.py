@@ -97,3 +97,69 @@ def test_normal_toll_page_not_flagged():
 def test_toll_empty_text_not_flagged():
     assert delivery_fee.check_toll(None) is None
     assert delivery_fee.check_toll("") is None
+
+
+# --- scam-awareness pages (2026-10-21) ---
+# darknyx.com's own Safety Guide quotes toll and parcel-fee scams as examples, and its own checker rated the
+# site "Suspicious" because of them. Text below is the guide's real wording (trimmed), as the checker sees it.
+SAFETY_GUIDE_TEXT = """
+Spot a scam message. Most scams share the same red flags.
+Unpaid toll or fine
+Text message
+"Final notice: unpaid road toll of $6.40. To avoid a $50 late fee and licence suspension, pay now at etoll-payments-us.com/pay"
+A tiny amount for a bill you never received.
+A threat that grows the longer you wait.
+Toll and traffic offices use their own website or app, not a link in a text.
+Do this Do not click. Look up the toll operator yourself and check your account there.
+Fake delivery notice
+Text message
+"SingPost: your parcel is held at customs. Pay a $2.99 customs fee at sg-post-redeliver.xyz within 48 hours."
+A small fee is how they get your card number.
+Do this Open the courier's official app and enter your tracking number there.
+Phishing messages copy real companies. A scam often uses a deadline. Scammers want you to act fast.
+These are the red flags in every scam. Report the scam and do not click the link.
+Never reply to a scam text, and block the phishing sender.
+"""
+
+
+def test_a_scam_awareness_page_quoting_toll_wording_is_informational_not_a_finding():
+    from usi.models import Severity
+    sig = delivery_fee.check_toll(SAFETY_GUIDE_TEXT)
+    assert sig is not None
+    assert sig.code == "toll_scam_wording_in_awareness_page"
+    assert sig.severity == Severity.INFO
+
+
+def test_a_scam_awareness_page_quoting_parcel_fee_wording_is_informational_not_a_finding():
+    from usi.models import Severity
+    sig = delivery_fee.check(SAFETY_GUIDE_TEXT)
+    assert sig is not None
+    assert sig.code == "delivery_fee_wording_in_awareness_page"
+    assert sig.severity == Severity.INFO
+
+
+def test_a_real_toll_scam_page_still_fires_with_no_awareness_language():
+    from usi.models import Severity
+    sig = delivery_fee.check_toll("Final notice: you have an unpaid toll on your E-ZPass account. Pay now to avoid a $50 late fee.")
+    assert sig.code == "toll_scam_pattern"
+    assert sig.severity == Severity.HIGH
+
+
+def test_a_parcel_scam_that_copies_a_warning_footer_still_fires():
+    # Lures copy the carrier's own "beware of scams" footer. A handful of those words must not switch the
+    # check off: it takes variety AND volume, which only a page about scams has.
+    sig = delivery_fee.check(
+        "Your parcel is held at customs. Pay the customs fee to release your delivery. "
+        "Beware of scams and phishing. Do not click links from others. Royal Mail will never ask for your password."
+    )
+    assert sig.code == "fake_delivery_fee_scam"
+
+
+def test_many_mentions_of_a_single_awareness_word_do_not_count_as_an_awareness_page():
+    text = "Unpaid toll on your account, pay now. " + "Scam alert! " * 10
+    assert delivery_fee.check_toll(text).code == "toll_scam_pattern"
+
+
+def test_few_mentions_of_several_awareness_words_do_not_count_either():
+    text = "Unpaid toll on your account, pay now. This is not a scam or phishing. Red flags: none."
+    assert delivery_fee.check_toll(text).code == "toll_scam_pattern"
