@@ -10,9 +10,13 @@ instead of "does this string match a known bad shape".
 Four sub-signals, each individually weak and prone to false positives
 alone (a short legitimate brand name can read as high-entropy by
 chance; a real word can have an unlucky consonant run) - only flags
-when at least two agree, mirroring crypto_drainer.py's and
-verdict/aggregator.py's general "don't fire on one weak signal alone"
-philosophy. Never returns anything above MEDIUM on its own; this is
+when at least two INDEPENDENT kinds of evidence agree, mirroring
+crypto_drainer.py's and verdict/aggregator.py's general "don't fire on
+one weak signal alone" philosophy. Low vowel ratio and long consonant
+run are one kind (consonant clustering), so together they count once;
+the 2026-10-21 false positive on darknyx.com came from counting them as
+two. A label of 10+ characters that fails both consonant tests still
+flags on its own. Never returns anything above MEDIUM on its own; this is
 corroborating evidence for the verdict aggregator to combine with
 other layers, not a standalone verdict-mover."""
 import math
@@ -27,6 +31,7 @@ ENTROPY_THRESHOLD_BITS = 3.5
 VOWEL_RATIO_LOW_THRESHOLD = 0.15
 MAX_NATURAL_CONSONANT_RUN = 4
 DIGIT_INTERSPERSION_THRESHOLD = 0.2
+LONG_LABEL_MIN = 10
 
 _VOWELS = set("aeiou")
 
@@ -107,7 +112,20 @@ def analyze(host: str) -> "list[Signal]":
     if digit_ratio >= DIGIT_INTERSPERSION_THRESHOLD:
         triggered.append("scattered_digits")
 
-    if len(triggered) < 2:
+    # A low vowel ratio and a long consonant run are the same observation (consonants clustering), so they
+    # count as ONE family of evidence, not two that "agree". Counting them separately flagged darknyx.com and
+    # would flag any short consonant-heavy real name (rhythms, crypts, nymphs). Independent families:
+    # entropy, consonant clustering, scattered digits.
+    consonant_signals = {"low_vowel_ratio", "long_consonant_run"}
+    families = (
+        ("high_entropy" in triggered)
+        + bool(consonant_signals & set(triggered))
+        + ("scattered_digits" in triggered)
+    )
+    # The one exception: a long label that fails BOTH consonant tests is unpronounceable in practice. Short
+    # labels never qualify, because that is exactly where real brand names live.
+    long_unpronounceable = len(sld) >= LONG_LABEL_MIN and consonant_signals <= set(triggered)
+    if families < 2 and not long_unpronounceable:
         return []
 
     evidence["triggered"] = triggered
