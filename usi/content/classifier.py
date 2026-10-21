@@ -36,6 +36,14 @@ SITE_THRESHOLD = 0.24
 # singpost.com and walmart.com 0.28 - as high as synthetic scam-shop texts (0.30 and 0.33), so a score in
 # that range cannot tell a real shop from a fake one. Only the malware-download text stood clear of every
 # real site (0.57). At the old cutoff (0.24) about 44% of those real sites raised a HIGH signal on their own.
+#
+# "scam-shop" specifically: re-measured 2026-10-21, including a margin-based (scam-shop score minus
+# legitimate score) rescoring, which was tested live and falsified - target.com's margin (+0.32) exceeded
+# the weakest synthetic scam-shop sample's (+0.25). This is architectural, not a calibration problem:
+# ordinary retail marketing copy (discounts, urgency, calls to buy) sits close to BOTH category descriptions
+# in embedding space. usi/content/shop_signals.py now runs usi/shop/'s concrete, structural checks (contact,
+# payment, discount depth) alongside this classifier for pages that look like a shop - that is the reliable
+# discriminator for this category; this classifier's "scam-shop" category stays as weak corroboration only.
 HIGH_CONFIDENCE = 0.45
 TEXT_TRUNCATE_CHARS = 4000
 LANG_DETECT_SAMPLE_CHARS = 500

@@ -95,7 +95,7 @@ def run(
     typosquat_match = next((s for s in signals if s.code == "typosquat_match"), None)
 
     if offline:
-        skipped += ["whois", "tls_cert", "crtsh", "fetch", "classifier",
+        skipped += ["whois", "tls_cert", "crtsh", "fetch", "classifier", "shop_signals",
                     "brand_impersonation", "favicon", "clickfix", "crypto_drainer",
                     "delivery_fee", "redirect_chain", "cloaking", "prompt_injection",
                     "reputation"]
@@ -178,6 +178,16 @@ def run(
                 classifier_signal = classifier.classify(extracted.text)
                 if classifier_signal:
                     signals.append(classifier_signal)
+
+                # Structural shop checks (contact, payment, discount depth) - a much more reliable
+                # scam-shop discriminator than the embedding classifier above, which cannot tell a real
+                # shop's marketing copy from a scam shop's (see usi/content/shop_signals.py). Only runs
+                # when the page looks like a shop at all (cheap, single-page gate, no extra network).
+                from .content import shop_signals
+                if shop_signals.looks_like_shop(raw_html, extracted.text):
+                    signals += shop_signals.check(
+                        fetch_result.final_url or url, host, raw_html, signals, config
+                    )
 
                 impersonation_signal = brand_impersonation.check(
                     host, extracted.title, extracted.text, extracted.has_password_field, brands
